@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import {
   ReactFlow,
   Background,
@@ -7,7 +7,8 @@ import {
   addEdge,
   useNodesState,
   useEdgesState,
-  type OnConnect
+  type OnConnect,
+  useReactFlow
 } from '@xyflow/react'
 
 import '@xyflow/react/dist/style.css'
@@ -21,14 +22,25 @@ import type {
   WeatherDisplayNodeData
 } from './nodes/WeatherDisplayNode'
 import type { ActivitySuggestionNodeData } from './nodes/ActivitySuggestionNode'
+import Sidebar from './Sidebar'
+
+let id = 0
+const getId = () => `dndnode_${id++}`
 
 export default function App () {
+  const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const [nodes, setNodes, onNodesChange] = useNodesState<AppNode>(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
+  const { screenToFlowPosition } = useReactFlow()
 
   const onCityChange = useCallback(
     (nodeId: string, newValue: string) => {
       setNodes(currentNodes => {
+        // Find connected target node IDs - only update nodes that are already connected
+        const targetNodeIds = edges
+          .filter(edge => edge.source === nodeId)
+          .map(edge => edge.target)
+
         return currentNodes.map(n => {
           // Update the source input node
           if (n.id === nodeId) {
@@ -40,8 +52,8 @@ export default function App () {
               }
             }
           }
-          // Update the weather display node with the new city name
-          if (n.id === 'weather-display' && n.type === 'weatherDisplay') {
+          // Automatically update connected weather display nodes (only if already connected)
+          if (targetNodeIds.includes(n.id) && n.type === 'weatherDisplay') {
             return {
               ...n,
               data: {
@@ -59,7 +71,7 @@ export default function App () {
         })
       })
     },
-    [setNodes]
+    [setNodes, edges]
   )
 
   const handleWeatherDataChange = useCallback(
@@ -68,6 +80,11 @@ export default function App () {
       weatherDataPayload: Partial<WeatherDisplayNodeSpecificData>
     ) => {
       setNodes(currentNodes => {
+        // Find connected target node IDs - only update nodes that are already connected
+        const targetNodeIds = edges
+          .filter(edge => edge.source === nodeId)
+          .map(edge => edge.target)
+
         return currentNodes.map(n => {
           // Update the WeatherDisplayNode itself
           if (n.id === nodeId) {
@@ -79,15 +96,10 @@ export default function App () {
               }
             }
           }
-          // Update the activity suggestion node with weather data
-          if (
-            n.id === 'activity-suggestion' &&
-            n.type === 'activitySuggestion'
-          ) {
+          // Automatically update connected activity suggestion nodes (only if already connected)
+          if (targetNodeIds.includes(n.id) && n.type === 'activitySuggestion') {
             // Get the weather data from the current weather node
-            const weatherNode = currentNodes.find(
-              cn => cn.id === 'weather-display'
-            )
+            const weatherNode = currentNodes.find(cn => cn.id === nodeId)
             const cityName = (weatherNode?.data as WeatherDisplayNodeData)
               ?.cityName
             const temperature =
@@ -111,7 +123,7 @@ export default function App () {
         })
       })
     },
-    [setNodes]
+    [setNodes, edges]
   )
 
   useEffect(() => {
@@ -119,36 +131,33 @@ export default function App () {
       let changed = false
       const newNodes = prevNodes.map(node => {
         if (node.type === 'input') {
-          const currentData = node.data as CityInputNodeSpecificData
-          if (!currentData.onValueChange) {
-            changed = true
-            return {
-              ...node,
-              data: {
-                ...node.data,
-                onValueChange: (value: string) => onCityChange(node.id, value)
-              }
+          // Always update the callback to ensure it has the latest edges state
+          changed = true
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              onValueChange: (value: string) => onCityChange(node.id, value)
             }
           }
         }
         if (node.type === 'weatherDisplay') {
           const currentData = node.data as WeatherDisplayNodeData
-          if (!currentData.onWeatherDataChange) {
-            changed = true
-            return {
-              ...node,
-              data: {
-                ...currentData,
-                onWeatherDataChange: (
-                  nodeIdFromCallback: string,
-                  payload: Partial<
-                    Omit<
-                      WeatherDisplayNodeSpecificData,
-                      'label' | 'cityName' | 'onWeatherDataChange'
-                    >
+          // Always update the callback to ensure it has the latest edges state
+          changed = true
+          return {
+            ...node,
+            data: {
+              ...currentData,
+              onWeatherDataChange: (
+                nodeIdFromCallback: string,
+                payload: Partial<
+                  Omit<
+                    WeatherDisplayNodeSpecificData,
+                    'label' | 'cityName' | 'onWeatherDataChange'
                   >
-                ) => handleWeatherDataChange(nodeIdFromCallback, payload)
-              }
+                >
+              ) => handleWeatherDataChange(nodeIdFromCallback, payload)
             }
           }
         }
@@ -156,29 +165,172 @@ export default function App () {
       })
       return changed ? newNodes : prevNodes
     })
-  }, [setNodes, onCityChange, handleWeatherDataChange])
+  }, [setNodes, onCityChange, handleWeatherDataChange, edges])
 
   const onConnect: OnConnect = useCallback(
-    connection => setEdges(eds => addEdge(connection, eds)),
-    [setEdges]
+    connection => {
+      // First add the edge
+      setEdges(eds => addEdge(connection, eds))
+      
+      // Then immediately propagate data through the new connection
+      const sourceNode = nodes.find(node => node.id === connection.source)
+      const targetNode = nodes.find(node => node.id === connection.target)
+
+      if (sourceNode && targetNode) {
+        // Connect: CityInput -> WeatherDisplay
+        if (sourceNode.type === 'input' && targetNode.type === 'weatherDisplay') {
+          const sourceData = sourceNode.data as CityInputNodeSpecificData
+          setNodes(nds =>
+            nds.map(n => {
+              if (n.id === targetNode.id) {
+                return {
+                  ...n,
+                  data: {
+                    ...(n.data as WeatherDisplayNodeData),
+                    cityName: sourceData.value || '',
+                    temperature: undefined,
+                    humidity: undefined,
+                    windSpeed: undefined,
+                    isLoading: !!sourceData.value,
+                    error: null
+                  }
+                }
+              }
+              return n
+            })
+          )
+        }
+        // Connect: WeatherDisplay -> ActivitySuggestion
+        else if (sourceNode.type === 'weatherDisplay' && targetNode.type === 'activitySuggestion') {
+          const sourceData = sourceNode.data as WeatherDisplayNodeData
+          setNodes(nds =>
+            nds.map(n => {
+              if (n.id === targetNode.id) {
+                return {
+                  ...n,
+                  data: {
+                    ...(n.data as ActivitySuggestionNodeData),
+                    cityName: sourceData.cityName,
+                    temperature: sourceData.temperature,
+                    suggestion: '',
+                    isLoading: !!(sourceData.cityName && typeof sourceData.temperature === 'number'),
+                    error: null
+                  }
+                }
+              }
+              return n
+            })
+          )
+        }
+      }
+    },
+    [setEdges, setNodes, nodes]
+  )
+
+  const onDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+  }, [])
+
+  const onDrop = useCallback(
+    (event: React.DragEvent<HTMLDivElement>) => {
+      event.preventDefault()
+
+      if (!reactFlowWrapper.current) {
+        return
+      }
+
+      const type = event.dataTransfer.getData('application/reactflow')
+
+      if (typeof type === 'undefined' || !type) {
+        return
+      }
+
+      const position = screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY
+      })
+
+      let newNodeData: Record<string, unknown> = { label: `${type} node` }
+      let nodeStyle: Record<string, unknown> = {}
+
+      // Set up initial data based on node type to match the initial nodes
+      if (type === 'input') {
+        newNodeData = {
+          label: 'Enter City', // Match the initial node label
+          value: ''
+        } satisfies Omit<CityInputNodeSpecificData, 'onValueChange'>
+        nodeStyle = { width: 305 } // Match the initial node width
+      } else if (type === 'weatherDisplay') {
+        newNodeData = {
+          label: 'Weather Information' // Match the initial node label
+        } satisfies Omit<WeatherDisplayNodeData, 'onWeatherDataChange' | 'cityName' | 'temperature' | 'humidity' | 'windSpeed' | 'isLoading' | 'error'>
+      } else if (type === 'activitySuggestion') {
+        newNodeData = {
+          label: 'Activity & Outfit Suggestions' // Match the initial node label
+        } satisfies Omit<ActivitySuggestionNodeData, 'cityName' | 'temperature' | 'suggestion' | 'isLoading' | 'error'>
+      }
+
+      const newNode: AppNode = {
+        id: getId(),
+        type,
+        position,
+        data: newNodeData,
+        ...(Object.keys(nodeStyle).length > 0 && { style: nodeStyle }) // Only add style if it exists
+      } as AppNode
+
+      setNodes(nds => {
+        const newNodes = nds.concat(newNode)
+        // Force callback injection for the new node
+        return newNodes.map(node => {
+          if (node.id === newNode.id) {
+            if (node.type === 'input') {
+              return {
+                ...node,
+                data: {
+                  ...node.data,
+                  onValueChange: (value: string) => onCityChange(node.id, value)
+                }
+              }
+            }
+            if (node.type === 'weatherDisplay') {
+              return {
+                ...node,
+                data: {
+                  ...node.data,
+                  onWeatherDataChange: (nodeIdFromCallback: string, payload: Partial<Omit<WeatherDisplayNodeSpecificData, 'label' | 'cityName' | 'onWeatherDataChange'>>) => handleWeatherDataChange(nodeIdFromCallback, payload)
+                }
+              }
+            }
+          }
+          return node
+        })
+      })
+    },
+    [screenToFlowPosition, setNodes, onCityChange, handleWeatherDataChange]
   )
 
   return (
-    <div style={{ height: '100vh', width: '100vw' }}>
-      <ReactFlow
-        nodes={nodes}
-        nodeTypes={nodeTypes}
-        onNodesChange={onNodesChange}
-        edges={edges}
-        edgeTypes={edgeTypes}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        fitView
-      >
-        <Background />
-        <MiniMap />
-        <Controls />
-      </ReactFlow>
+    <div style={{ display: 'flex', height: '100vh', width: '100vw', flexDirection: 'row' }}>
+      <Sidebar />
+      <div style={{ flexGrow: 1, height: '100%' }} ref={reactFlowWrapper}>
+        <ReactFlow
+          nodes={nodes}
+          nodeTypes={nodeTypes}
+          onNodesChange={onNodesChange}
+          edges={edges}
+          edgeTypes={edgeTypes}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
+          onDrop={onDrop}
+          onDragOver={onDragOver}
+          fitView
+        >
+          <Background />
+          <MiniMap />
+          <Controls />
+        </ReactFlow>
+      </div>
     </div>
   )
 }

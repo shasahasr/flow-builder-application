@@ -6,27 +6,7 @@ import CityInputNode from './CityInputNode';
 import WeatherDisplayNode from './WeatherDisplayNode';
 import ActivitySuggestionNode from './ActivitySuggestionNode';
 
-export const initialNodes: AppNode[] = [
-  {
-    id: 'city-input',
-    type: 'input', // This type must be a key in nodeTypes
-    position: { x: 0, y: 0 },
-    data: { label: 'Enter City' },
-    style: { width: 305 },
-  },
-  {
-    id: 'weather-display',
-    type: 'weatherDisplay', // This type must be a key in nodeTypes
-    position: { x: 0, y: 150 },
-    data: { label: 'Weather Information' },
-  },
-  {
-    id: 'activity-suggestion',
-    type: 'activitySuggestion', // This type must be a key in nodeTypes
-    position: { x: 0, y: 370 }, // Adjusted y for spacing
-    data: { label: 'Activity & Outfit Suggestions' },
-  },
-];
+export const initialNodes: AppNode[] = [];
 
 export const nodeTypes = {
   // 'position-logger': PositionLoggerNode, // Comment out or remove if not used
