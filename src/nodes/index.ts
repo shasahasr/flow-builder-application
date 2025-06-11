@@ -1,17 +1,27 @@
 import type { NodeTypes } from '@xyflow/react';
 
-// import { PositionLoggerNode } from './PositionLoggerNode'; // Comment out or remove if not used
-import type { AppNode } from './types'; // Ensure AppNode is correctly defined in types.ts
+import type { AppNode } from './types';
 import CityInputNode from './CityInputNode';
 import WeatherDisplayNode from './WeatherDisplayNode';
 import ActivitySuggestionNode from './ActivitySuggestionNode';
 
+// Import new AI agent workflow nodes
+import DisplayMessageNode from './DisplayMessageNode';
+import InputParameterNode from './InputParameterNode';
+import ApiCallNode from './ApiCallNode';
+import ConditionNode from './ConditionNode';
+
 export const initialNodes: AppNode[] = [];
 
 export const nodeTypes = {
-  // 'position-logger': PositionLoggerNode, // Comment out or remove if not used
-  input: CityInputNode, // Ensure key matches type string in initialNodes and AppNode
-  weatherDisplay: WeatherDisplayNode, // Ensure key matches type string
-  activitySuggestion: ActivitySuggestionNode, // Ensure key matches type string
-  // Add any of your custom nodes here!
+  // Original node types (commented out but kept for reference)
+  input: CityInputNode,
+  weatherDisplay: WeatherDisplayNode,
+  activitySuggestion: ActivitySuggestionNode,
+  
+  // New node types for AI agent workflow
+  display_message: DisplayMessageNode,
+  input_parameter: InputParameterNode,
+  api_call: ApiCallNode,
+  condition: ConditionNode,
 } satisfies NodeTypes;

@@ -1,6 +1,10 @@
 import type { Node } from '@xyflow/react'
-import type { WeatherDisplayNodeData } from './WeatherDisplayNode' // Import the specific data type
-import type { ActivitySuggestionNodeData } from './ActivitySuggestionNode' // Import the new data type
+import type { WeatherDisplayNodeData } from './WeatherDisplayNode'
+import type { ActivitySuggestionNodeData } from './ActivitySuggestionNode'
+import type { DisplayMessageNodeData } from './DisplayMessageNode'
+import type { InputParameterNodeData } from './InputParameterNode'
+import type { ApiCallNodeData } from './ApiCallNode'
+import type { ConditionNodeData } from './ConditionNode'
 
 export type PositionLoggerNode = Node<{ label: string }, 'position-logger'>
 
@@ -25,12 +29,28 @@ export type ActivitySuggestionNodeType = Node<
   'activitySuggestion'
 >
 
+// Define new AI workflow node types
+export type DisplayMessageNodeType = Node<
+  DisplayMessageNodeData,
+  'display_message'
+>
+export type InputParameterNodeType = Node<
+  InputParameterNodeData,
+  'input_parameter'
+>
+export type ApiCallNodeType = Node<ApiCallNodeData, 'api_call'>
+export type ConditionNodeType = Node<ConditionNodeData, 'condition'>
+
 // Update AppNode to include the more specific CityInputNode and other node types
 export type AppNode =
   | CityInputNode
   | PositionLoggerNode
-  | WeatherDisplayNodeType // Add the new node type here
-  | ActivitySuggestionNodeType // Add the new activity suggestion node type
+  | WeatherDisplayNodeType
+  | ActivitySuggestionNodeType
+  | DisplayMessageNodeType
+  | InputParameterNodeType
+  | ApiCallNodeType
+  | ConditionNodeType
   | Node<{ label?: string | undefined; [key: string]: unknown }, 'default'>
   | Node<{ label?: string | undefined; [key: string]: unknown }, 'output'>
   | Node<{ label?: string | undefined; [key: string]: unknown }, 'group'>

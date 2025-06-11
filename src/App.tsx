@@ -8,7 +8,8 @@ import {
   useNodesState,
   useEdgesState,
   type OnConnect,
-  useReactFlow
+  useReactFlow,
+  ReactFlowProvider
 } from '@xyflow/react'
 
 import '@xyflow/react/dist/style.css'
@@ -23,11 +24,14 @@ import type {
 } from './nodes/WeatherDisplayNode'
 import type { ActivitySuggestionNodeData } from './nodes/ActivitySuggestionNode'
 import Sidebar from './Sidebar'
+import { WorkflowProvider } from './workflow/WorkflowContext'
+import WorkflowControls from './workflow/WorkflowControls'
+import WorkflowOutput from './workflow/WorkflowOutput'
 
 let id = 0
 const getId = () => `dndnode_${id++}`
 
-export default function App () {
+export function FlowApp() {
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const [nodes, setNodes, onNodesChange] = useNodesState<AppNode>(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
@@ -222,6 +226,9 @@ export default function App () {
             })
           )
         }
+        
+        // For AI agent workflow nodes, just add the connection
+        // Data flow will be managed at runtime when executing the workflow
       }
     },
     [setEdges, setNodes, nodes]
@@ -269,6 +276,24 @@ export default function App () {
         newNodeData = {
           label: 'Activity & Outfit Suggestions' // Match the initial node label
         } satisfies Omit<ActivitySuggestionNodeData, 'cityName' | 'temperature' | 'suggestion' | 'isLoading' | 'error'>
+      } 
+      // New AI agent workflow node types
+      else if (type === 'display_message') {
+        newNodeData = {
+          label: 'Display Message'
+        }
+      } else if (type === 'input_parameter') {
+        newNodeData = {
+          label: 'Input Parameter'
+        }
+      } else if (type === 'api_call') {
+        newNodeData = {
+          label: 'API Call'
+        }
+      } else if (type === 'condition') {
+        newNodeData = {
+          label: 'Condition'
+        }
       }
 
       const newNode: AppNode = {
@@ -311,26 +336,38 @@ export default function App () {
   )
 
   return (
-    <div style={{ display: 'flex', height: '100vh', width: '100vw', flexDirection: 'row' }}>
-      <Sidebar />
-      <div style={{ flexGrow: 1, height: '100%' }} ref={reactFlowWrapper}>
-        <ReactFlow
-          nodes={nodes}
-          nodeTypes={nodeTypes}
-          onNodesChange={onNodesChange}
-          edges={edges}
-          edgeTypes={edgeTypes}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          onDrop={onDrop}
-          onDragOver={onDragOver}
-          fitView
-        >
-          <Background />
-          <MiniMap />
-          <Controls />
-        </ReactFlow>
+    <WorkflowProvider>
+      <div style={{ display: 'flex', height: '100vh', width: '100vw', flexDirection: 'row' }}>
+        <Sidebar />
+        <div style={{ flexGrow: 1, height: '100%' }} ref={reactFlowWrapper}>
+          <ReactFlow
+            nodes={nodes}
+            nodeTypes={nodeTypes}
+            onNodesChange={onNodesChange}
+            edges={edges}
+            edgeTypes={edgeTypes}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onDrop={onDrop}
+            onDragOver={onDragOver}
+            fitView
+          >
+            <Background />
+            <MiniMap />
+            <Controls />
+            <WorkflowControls />
+            <WorkflowOutput />
+          </ReactFlow>
+        </div>
       </div>
-    </div>
+    </WorkflowProvider>
   )
+}
+
+export default function App() {
+  return (
+    <ReactFlowProvider>
+      <FlowApp />
+    </ReactFlowProvider>
+  );
 }

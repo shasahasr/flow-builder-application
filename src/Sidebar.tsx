@@ -27,14 +27,51 @@ const nodeStyle: React.CSSProperties = {
   textAlign: 'center'
 }
 
+const categoryStyle: React.CSSProperties = {
+  fontSize: '16px',
+  fontWeight: 'bold',
+  marginTop: '15px',
+  marginBottom: '8px'
+}
+
 export default function Sidebar () {
   return (
     <aside style={sidebarStyle}>
+      <div style={categoryStyle}>AI Agent Workflow</div>
+
       <div
-        style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '10px' }}
+        style={nodeStyle}
+        onDragStart={event => onDragStart(event, 'display_message')}
+        draggable
       >
-        Nodes
+        Display Message
       </div>
+
+      <div
+        style={nodeStyle}
+        onDragStart={event => onDragStart(event, 'input_parameter')}
+        draggable
+      >
+        Input Parameter
+      </div>
+
+      <div
+        style={nodeStyle}
+        onDragStart={event => onDragStart(event, 'api_call')}
+        draggable
+      >
+        API Call
+      </div>
+
+      <div
+        style={nodeStyle}
+        onDragStart={event => onDragStart(event, 'condition')}
+        draggable
+      >
+        Condition
+      </div>
+
+      {/* Original nodes are kept commented for reference
       <div
         style={nodeStyle}
         onDragStart={event => onDragStart(event, 'input')}
@@ -56,6 +93,7 @@ export default function Sidebar () {
       >
         Activity Suggestion Node
       </div>
+      */}
     </aside>
   )
 }
