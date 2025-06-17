@@ -338,26 +338,39 @@ export function FlowApp() {
   return (
     <WorkflowProvider>
       <div style={{ display: 'flex', height: '100vh', width: '100vw', flexDirection: 'row' }}>
-        <Sidebar />
-        <div style={{ flexGrow: 1, height: '100%' }} ref={reactFlowWrapper}>
-          <ReactFlow
-            nodes={nodes}
-            nodeTypes={nodeTypes}
-            onNodesChange={onNodesChange}
-            edges={edges}
-            edgeTypes={edgeTypes}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            onDrop={onDrop}
-            onDragOver={onDragOver}
-            fitView
-          >
-            <Background />
-            <MiniMap />
-            <Controls />
-            <WorkflowControls />
-            <WorkflowOutput />
-          </ReactFlow>
+        {/* Left side - Flow Builder (50% of screen) */}
+        <div style={{ width: '50%', height: '100%', display: 'flex', flexDirection: 'row' }}>
+          <Sidebar />
+          <div style={{ flexGrow: 1, height: '100%', position: 'relative' }} ref={reactFlowWrapper}>
+            <ReactFlow
+              nodes={nodes}
+              nodeTypes={nodeTypes}
+              onNodesChange={onNodesChange}
+              edges={edges}
+              edgeTypes={edgeTypes}
+              onEdgesChange={onEdgesChange}
+              onConnect={onConnect}
+              onDrop={onDrop}
+              onDragOver={onDragOver}
+              fitView
+            >
+              <Background />
+              <MiniMap />
+              <Controls />
+              <WorkflowControls />
+            </ReactFlow>
+          </div>
+        </div>
+        
+        {/* Right side - Chatbot Output (50% of screen) */}
+        <div style={{ 
+          width: '50%', 
+          height: '100%',
+          borderLeft: '1px solid #ddd',
+          display: 'flex',
+          flexDirection: 'column'
+        }}>
+          <WorkflowOutput />
         </div>
       </div>
     </WorkflowProvider>

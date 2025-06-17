@@ -1,10 +1,4 @@
-import React, {
-  createContext,
-  useContext,
-  useState,
-  useCallback,
-  useRef
-} from 'react'
+import React, { createContext, useContext, useState, useCallback, useRef } from 'react'
 import { Edge } from '@xyflow/react'
 import { AppNode } from '../nodes/types'
 import { WorkflowUtils } from './WorkflowUtils'
@@ -54,9 +48,7 @@ const SAVED_WORKFLOWS_KEY = 'ai_agent_saved_workflows'
 export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
   children
 }) => {
-  const [workflowState, setWorkflowState] = useState<Record<string, unknown>>(
-    {}
-  )
+  const [workflowState, setWorkflowState] = useState<Record<string, unknown>>({})
   const [workflowOutput, setWorkflowOutput] = useState<string[]>([])
   const [isExecuting, setIsExecuting] = useState(false)
   const [waitingForUserInput, setWaitingForUserInput] = useState(false)
@@ -73,7 +65,7 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
     }
     return []
   })
-
+  
   // Use refs to store callback functions for handling user input
   const userInputResolveRef = useRef<((value: string) => void) | null>(null)
 
@@ -87,7 +79,7 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
     if (userInputResolveRef.current) {
       // Add the user's message to the output
       addOutputMessage(text, 'user')
-
+      
       // Resolve the promise with the user's input
       userInputResolveRef.current(text)
       userInputResolveRef.current = null
@@ -143,46 +135,37 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
 
     return null
   }, [])
-
+  
   // Helper function to process a message with variable replacements
-  const processMessage = useCallback(
-    (message: string, contextData: Record<string, unknown>): string => {
-      // Replace variables in the format ${variableName} with their values from context
-      return WorkflowUtils.evaluateExpression(message, contextData)
-    },
-    []
-  )
-
+  const processMessage = useCallback((message: string, contextData: Record<string, unknown>): string => {
+    // Replace variables in the format ${variableName} with their values from context
+    return WorkflowUtils.evaluateExpression(message, contextData)
+  }, [])
+  
   // Function to add a message to the workflow output formatted for the chat UI
-  const addOutputMessage = useCallback(
-    (message: string, role: 'user' | 'assistant' = 'assistant') => {
-      const messageObj = {
-        role,
-        content: message,
-        timestamp: new Date().toISOString()
-      }
-      setWorkflowOutput(prev => [...prev, JSON.stringify(messageObj)])
-    },
-    []
-  )
-
+  const addOutputMessage = useCallback((message: string, role: 'user' | 'assistant' = 'assistant') => {
+    const messageObj = {
+      role,
+      content: message,
+      timestamp: new Date().toISOString()
+    }
+    setWorkflowOutput(prev => [...prev, JSON.stringify(messageObj)])
+  }, [])
+  
   // Function to wait for user input (will be connected to the chat UI)
-  const waitForUserInput = useCallback(
-    (question: string, paramName: string): Promise<string> => {
-      // Add the question to the output as an assistant message
-      addOutputMessage(question, 'assistant')
-
-      // Set waiting state to true
-      setWaitingForUserInput(true)
-
-      // Return a promise that resolves when the user enters input
-      return new Promise<string>(resolve => {
-        // Store the resolve function in the ref
-        userInputResolveRef.current = resolve
-      })
-    },
-    [addOutputMessage]
-  )
+  const waitForUserInput = useCallback((question: string, paramName: string): Promise<string> => {
+    // Add the question to the output as an assistant message
+    addOutputMessage(question, 'assistant')
+    
+    // Set waiting state to true
+    setWaitingForUserInput(true)
+    
+    // Return a promise that resolves when the user enters input
+    return new Promise<string>((resolve) => {
+      // Store the resolve function in the ref
+      userInputResolveRef.current = resolve
+    })
+  }, [addOutputMessage])
 
   // Helper function to execute a single node
   const executeNode = useCallback(
@@ -206,7 +189,7 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
           // Get message from node data and process any variables
           let message = (node.data?.message as string) || 'No message provided'
           message = processMessage(message, contextData)
-
+          
           // Add as an assistant message
           addOutputMessage(message, 'assistant')
           break
@@ -215,14 +198,12 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
         case 'input_parameter': {
           // Get the question from node data and process any variables
           const paramName = (node.data?.paramName as string) || 'parameter'
-          let question =
-            (node.data?.question as string) ||
-            `Please provide a value for ${paramName}:`
+          let question = (node.data?.question as string) || `Please provide a value for ${paramName}:`
           question = processMessage(question, contextData)
-
+          
           // Wait for user input
           const userInput = await waitForUserInput(question, paramName)
-
+          
           // Store the user's input in the context
           nextContextData[paramName] = userInput
           break
@@ -237,42 +218,37 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
             let apiKey = ''
             let responsePath = ''
             let resultMessage = 'API call result: ${result}'
-
+            
             if (node.data && typeof node.data === 'object') {
               if ('url' in node.data) url = node.data.url as string
-              if ('method' in node.data)
-                method = (node.data.method as string) || 'GET'
+              if ('method' in node.data) method = (node.data.method as string) || 'GET'
               if ('payload' in node.data) payload = node.data.payload as string
               if ('apiKey' in node.data) apiKey = node.data.apiKey as string
-              if ('responsePath' in node.data)
-                responsePath = node.data.responsePath as string
-              if ('resultMessage' in node.data)
-                resultMessage = node.data.resultMessage as string
+              if ('responsePath' in node.data) responsePath = node.data.responsePath as string
+              if ('resultMessage' in node.data) resultMessage = node.data.resultMessage as string
             }
-
+            
             // Process any variables in the URL, payload and other fields
             url = processMessage(url, contextData)
             payload = processMessage(payload, contextData)
             resultMessage = processMessage(resultMessage, contextData)
-
+            
             // Add a message showing we're making the API call
             addOutputMessage(`Making API call to ${url}...`, 'assistant')
-
+            
             // Simulate API call
             let responseData
-
+            
             // In a real app we would do a real fetch here
             // For now, simulate with a delay
             await new Promise(resolve => setTimeout(resolve, 1500))
-
+            
             // Create a mock response based on the API config
             if (url.includes('weather')) {
               // Mock weather API response
-              const cityMatch =
-                url.match(/city=([^&]+)/) ||
-                payload.match(/city[":]\s*["']?([^"',]+)/)
+              const cityMatch = url.match(/city=([^&]+)/) || payload.match(/city[":]\s*["']?([^"',]+)/) 
               const city = cityMatch ? cityMatch[1] : 'New York'
-
+              
               responseData = {
                 location: {
                   name: city,
@@ -280,9 +256,7 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
                 },
                 current: {
                   temperature: Math.round(15 + Math.random() * 20),
-                  conditions: ['sunny', 'cloudy', 'rainy'][
-                    Math.floor(Math.random() * 3)
-                  ]
+                  conditions: ['sunny', 'cloudy', 'rainy'][Math.floor(Math.random() * 3)]
                 }
               }
             } else {
@@ -295,10 +269,10 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
                 }
               }
             }
-
+            
             // Store the full response in the context
             nextContextData['apiResponse'] = responseData
-
+            
             // Extract specific data if a response path is provided
             let result = responseData
             if (responsePath) {
@@ -313,16 +287,16 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
                 console.error('Error extracting data from response path', e)
               }
             }
-
+            
             // Store the extracted result separately
             nextContextData['result'] = result
-
+            
             // Format the result message with the extracted data
             const finalResultMessage = WorkflowUtils.evaluateExpression(
               resultMessage,
               { ...contextData, result }
             )
-
+            
             // Add the result message to the output
             addOutputMessage(finalResultMessage, 'assistant')
           } catch (error) {
@@ -335,118 +309,98 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
           // Access condition expression and name from the node data
           let conditionText = 'false'
           let conditionName = 'Condition'
-
+          
           if (node.data && typeof node.data === 'object') {
-            if ('condition' in node.data)
-              conditionText = node.data.condition as string
+            if ('condition' in node.data) conditionText = node.data.condition as string
             if ('name' in node.data) conditionName = node.data.name as string
           }
-
+          
           // Process the condition text to replace any variables
           conditionText = processMessage(conditionText, contextData)
-
+          
           let conditionResult = false
           let debugInfo = ''
-
+          
           try {
             // First check for common comparison patterns
-            const comparison = conditionText.match(/(.*?)(==|!=|>|<|>=|<=)(.*)/)
-
+            const comparison = conditionText.match(/(.*?)(==|!=|>|<|>=|<=)(.*)/);
+            
             if (comparison) {
               // We have a structured comparison
-              const [, left, operator, right] = comparison
-              const leftValue = left.trim()
-              const rightValue = right.trim()
-
+              const [, left, operator, right] = comparison;
+              const leftValue = left.trim();
+              const rightValue = right.trim();
+              
               // Get actual values, handling string literals and numbers
               const getComparisonValue = (val: string) => {
                 if (val.startsWith('"') && val.endsWith('"')) {
-                  return val.slice(1, -1) // Remove quotes
+                  return val.slice(1, -1); // Remove quotes
                 }
                 if (val.startsWith("'") && val.endsWith("'")) {
-                  return val.slice(1, -1) // Remove quotes
+                  return val.slice(1, -1); // Remove quotes
                 }
                 if (!isNaN(Number(val))) {
-                  return Number(val) // Convert to number
+                  return Number(val); // Convert to number
                 }
                 // Try to find in context
-                return contextData[val] !== undefined ? contextData[val] : val
-              }
-
-              const leftEval = getComparisonValue(leftValue)
-              const rightEval = getComparisonValue(rightValue)
-
+                return contextData[val] !== undefined ? contextData[val] : val;
+              };
+              
+              const leftEval = getComparisonValue(leftValue);
+              const rightEval = getComparisonValue(rightValue);
+              
               // Perform the comparison
               switch (operator) {
-                case '==':
-                  conditionResult = leftEval == rightEval
-                  break
-                case '!=':
-                  conditionResult = leftEval != rightEval
-                  break
-                case '>':
-                  conditionResult = Number(leftEval) > Number(rightEval)
-                  break
-                case '<':
-                  conditionResult = Number(leftEval) < Number(rightEval)
-                  break
-                case '>=':
-                  conditionResult = Number(leftEval) >= Number(rightEval)
-                  break
-                case '<=':
-                  conditionResult = Number(leftEval) <= Number(rightEval)
-                  break
+                case '==': conditionResult = leftEval == rightEval; break;
+                case '!=': conditionResult = leftEval != rightEval; break;
+                case '>': conditionResult = Number(leftEval) > Number(rightEval); break;
+                case '<': conditionResult = Number(leftEval) < Number(rightEval); break;
+                case '>=': conditionResult = Number(leftEval) >= Number(rightEval); break;
+                case '<=': conditionResult = Number(leftEval) <= Number(rightEval); break;
               }
-
-              debugInfo = `${leftEval} ${operator} ${rightEval}`
+              
+              debugInfo = `${leftEval} ${operator} ${rightEval}`;
             } else {
               // Try to evaluate as a boolean expression
               // If it's just a variable name, check if the value is truthy
               if (conditionText in contextData) {
-                conditionResult = Boolean(contextData[conditionText])
-                debugInfo = `Variable '${conditionText}' is ${
-                  conditionResult ? 'truthy' : 'falsy'
-                }`
+                conditionResult = Boolean(contextData[conditionText]);
+                debugInfo = `Variable '${conditionText}' is ${conditionResult ? 'truthy' : 'falsy'}`;
               } else {
                 // As a last resort, use a safer approach than eval
                 try {
                   // Convert to a boolean result
                   conditionResult = Boolean(
-                    new Function(
-                      'context',
-                      `
+                    new Function('context', `
                       "use strict";
                       with (context) {
                         return (${conditionText});
                       }
-                    `
-                    )(contextData)
-                  )
+                    `)(contextData)
+                  );
                 } catch {
-                  conditionResult = false
+                  conditionResult = false;
                 }
-                debugInfo = conditionText
+                debugInfo = conditionText;
               }
             }
           } catch (e) {
-            console.error(`Error evaluating condition: ${e}`)
-            conditionResult = false
-            debugInfo = `Error: ${e}`
+            console.error(`Error evaluating condition: ${e}`);
+            conditionResult = false;
+            debugInfo = `Error: ${e}`;
           }
-
+          
           // We can optionally show condition evaluation info in developer mode
-          console.log(
-            `Condition '${conditionName}' evaluated: ${debugInfo} = ${conditionResult}`
-          )
-
+          console.log(`Condition '${conditionName}' evaluated: ${debugInfo} = ${conditionResult}`);
+          
           // Only follow edges with matching condition result
-          const outgoingEdges = nodeOutgoingEdges[nodeId] || []
+          const outgoingEdges = nodeOutgoingEdges[nodeId] || [];
           const filteredEdges = outgoingEdges.filter(
             edge =>
               (conditionResult && edge.sourceHandle === 'true') ||
               (!conditionResult && edge.sourceHandle === 'false')
-          )
-
+          );
+          
           // Execute all nodes connected to matching condition paths
           for (const edge of filteredEdges) {
             await executeNode(
@@ -454,11 +408,11 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
               nodeMap,
               nodeOutgoingEdges,
               nextContextData
-            )
+            );
           }
-
+          
           // Return early for condition nodes as we've already handled the outgoing edges
-          return nextContextData
+          return nextContextData;
         }
       }
 
