@@ -174,3 +174,49 @@ body,
   z-index: 1;
   pointer-events: none;
 }
+
+/* Handle styling for better visibility and connection points */
+.react-flow__handle {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #555;
+  border: 2px solid #fff;
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.3);
+}
+
+/* Different colors for different sides */
+.react-flow__handle-left {
+  background-color: #ff9800;
+}
+
+.react-flow__handle-right {
+  background-color: #2196f3;
+}
+
+.react-flow__handle-bottom {
+  background-color: #4caf50;
+}
+
+.react-flow__handle-top {
+  background-color: #9c27b0;
+}
+
+/* Handle hover effect */
+.react-flow__handle:hover {
+  transform: scale(1.2);
+  transition: transform 0.2s ease;
+}
+
+/* Connection line styling */
+.react-flow__edge-path {
+  stroke-width: 2;
+  stroke: #888;
+}
+
+/* Edge interaction highlighting */
+.react-flow__edge.selected .react-flow__edge-path,
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke: #1a73e8;
+  stroke-width: 3;
+}

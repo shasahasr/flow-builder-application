@@ -131,6 +131,7 @@ function ConditionNode ({ data, isConnectable, id }: NodeProps) {
       >
         <div style={{ textAlign: 'center' }}>
           <span>True</span>
+          {/* True output handles - bottom and right */}
           <Handle
             type='source'
             position={Position.Bottom}
@@ -141,9 +142,20 @@ function ConditionNode ({ data, isConnectable, id }: NodeProps) {
               background: 'green'
             }}
           />
+          <Handle
+            type='source'
+            position={Position.Right}
+            id='true-side'
+            isConnectable={isConnectable}
+            style={{
+              top: '30%',
+              background: 'green'
+            }}
+          />
         </div>
         <div style={{ textAlign: 'center' }}>
           <span>False</span>
+          {/* False output handles - bottom and left */}
           <Handle
             type='source'
             position={Position.Bottom}
@@ -151,6 +163,16 @@ function ConditionNode ({ data, isConnectable, id }: NodeProps) {
             isConnectable={isConnectable}
             style={{
               left: '75%',
+              background: 'red'
+            }}
+          />
+          <Handle
+            type='source'
+            position={Position.Left}
+            id='false-side'
+            isConnectable={isConnectable}
+            style={{
+              top: '70%',
               background: 'red'
             }}
           />

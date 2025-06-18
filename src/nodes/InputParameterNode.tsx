@@ -260,11 +260,31 @@ function InputParameterNode ({ data, isConnectable, id }: NodeProps) {
         </div>
       )}
 
-      {/* Output handle */}
+      {/* Multiple Output handles */}
+      {/* Bottom output handle */}
       <Handle
         type='source'
+        id='handle-bottom'
         position={Position.Bottom}
         style={{ background: '#555' }}
+        isConnectable={isConnectable}
+      />
+
+      {/* Right output handle */}
+      <Handle
+        type='source'
+        id='handle-right'
+        position={Position.Right}
+        style={{ background: '#555' }}
+        isConnectable={isConnectable}
+      />
+
+      {/* Left output handle */}
+      <Handle
+        type='source'
+        id='handle-left'
+        position={Position.Left}
+        style={{ top: '70%', background: '#555' }}
         isConnectable={isConnectable}
       />
     </div>

@@ -359,7 +359,7 @@ export function FlowApp() {
         {/* Main content */}
         <div style={{ display: 'flex', flexGrow: 1, flexDirection: 'row', background: '#ffffff' }}>
           {/* Left side - Flow Builder (50% of screen) */}
-          <div style={{ width: '50%', height: '100%', display: 'flex', flexDirection: 'row', background: '#fafafa' }}>
+          <div style={{ width: '60%', height: '100%', display: 'flex', flexDirection: 'row', background: '#fafafa' }}>
             <Sidebar />
             <div style={{ flexGrow: 1, height: '100%', position: 'relative', background: '#f5f5f5' }} ref={reactFlowWrapper}>
             <ReactFlow
@@ -388,7 +388,7 @@ export function FlowApp() {
         
         {/* Right side - Chatbot Output (50% of screen) */}
         <div style={{ 
-          width: '50%', 
+          width: '40%', 
           height: '100%',
           borderLeft: '1px solid #ddd',
           display: 'flex',
