@@ -10,6 +10,7 @@ import DisplayMessageNode from './DisplayMessageNode';
 import InputParameterNode from './InputParameterNode';
 import ApiCallNode from './ApiCallNode';
 import ConditionNode from './ConditionNode';
+import YesNoConditionNode from './YesNoConditionNode';
 
 export const initialNodes: AppNode[] = [];
 
@@ -24,4 +25,5 @@ export const nodeTypes = {
   input_parameter: InputParameterNode,
   api_call: ApiCallNode,
   condition: ConditionNode,
+  yes_no_condition: YesNoConditionNode // New yes/no condition node
 } satisfies NodeTypes;

@@ -71,6 +71,14 @@ export default function Sidebar () {
         Condition
       </div>
 
+      <div
+        style={{ ...nodeStyle, background: '#f0fff0', borderColor: '#88cc88' }}
+        onDragStart={event => onDragStart(event, 'yes_no_condition')}
+        draggable
+      >
+        Yes/No Condition
+      </div>
+
       {/* Original nodes are kept commented for reference
       <div
         style={nodeStyle}

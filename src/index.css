@@ -6,6 +6,13 @@
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
+  
+  /* Clerk custom styling */
+  --clerk-primary: #1a73e8;
+  --clerk-primary-contrast-text: #ffffff;
+  --clerk-card-border: none;
+  --clerk-card-box-shadow: none;
+  --clerk-form-min-width: 100%;
 }
 
 html,
@@ -13,4 +20,157 @@ body,
 #root {
   height: 100%;
   margin: 0;
+  background-color: #f5f5f5; /* Add default background color */
+}
+
+/* Clerk custom styling overrides */
+.cl-rootBox {
+  width: 100%;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+}
+
+.cl-card {
+  box-shadow: none !important;
+  border: none !important;
+  padding: 1.5rem !important;
+  padding-bottom: 2.5rem !important; /* Increase bottom padding */
+  width: 100% !important;
+  max-width: 400px !important;
+  margin: 0 auto !important;
+  min-height: 460px !important; /* Set minimum height for the card */
+}
+
+.cl-formButtonPrimary {
+  font-size: 16px !important;
+  font-weight: 500 !important;
+  padding: 10px 20px !important;
+  border-radius: 6px !important;
+  background-color: var(--clerk-primary) !important;
+  width: 100% !important;
+}
+
+.cl-formFieldInput {
+  font-size: 16px !important;
+  padding: 10px 16px !important;
+  border-radius: 6px !important;
+}
+
+/* Center the social buttons */
+.cl-socialButtonsIconButton {
+  margin: 0 5px !important;
+}
+
+.cl-socialButtonsBlockButton {
+  width: 100% !important;
+  justify-content: center !important;
+}
+
+/* Ensure the internal containers are centered properly */
+.cl-internal-b3fm6y,
+.cl-internal-wkkub3,
+.cl-internal-uyu03q {
+  width: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  min-height: 400px !important; /* Set minimum height for internal containers */
+}
+
+/* Fix the alignment of the content */
+.cl-main {
+  width: 100% !important;
+  max-width: 400px !important;
+  margin: 0 auto !important;
+}
+
+/* Hide development mode badge */
+.cl-badge {
+  display: none !important;
+}
+
+/* Additional styles to fix alignment issues */
+.cl-auth-form-body {
+  width: 100% !important;
+  max-width: 400px !important;
+  margin: 0 auto !important;
+}
+
+.cl-internal-wkkub3 {
+  margin: 0 auto !important;
+  width: 100% !important;
+  max-width: 400px !important;
+}
+
+/* Fix social buttons container */
+.cl-socialButtonsIconButton {
+  display: flex !important;
+  justify-content: center !important;
+}
+
+/* Make dividers align correctly */
+.cl-dividerText {
+  width: 100% !important;
+  text-align: center !important;
+}
+
+/* Footer link styles */
+.cl-footerActionText, 
+.cl-footerActionLink {
+  font-size: 14px !important;
+}
+
+/* Fix form width */
+.cl-form {
+  width: 100% !important;
+  padding-bottom: 25px !important;
+}
+
+/* Add extra bottom margin to the footer to prevent content from touching the edge */
+.cl-footerAction {
+  margin-bottom: 20px !important;
+}
+
+/* Ensure the auth page container has enough room for the card */
+.clerk-sign-in-wrapper, .clerk-sign-up-wrapper {
+  display: flex !important;
+  justify-content: center !important;
+  width: 100% !important;
+  padding-bottom: 20px !important; /* Add padding at the bottom */
+}
+
+/* Ensure the form footer has enough space */
+.cl-formFooter {
+  margin-top: 30px !important;
+  margin-bottom: 20px !important;
+  padding-bottom: 15px !important;
+}
+
+/* Adjust container spacing for the Development badge if it appears */
+.cl-authFormContainer {
+  margin-bottom: 35px !important;
+}
+
+/* Add vertical space between form elements */
+.cl-formFieldRow {
+  margin-bottom: 16px !important;
+}
+
+/* Add space for the bottom of the auth container */
+.cl-authWrapper {
+  padding-bottom: 30px !important;
+}
+
+/* Add a subtle bottom fade effect to ensure content doesn't appear cut off */
+.cl-card::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 20px;
+  background: linear-gradient(to top, rgba(255,255,255,0.9), rgba(255,255,255,0));
+  z-index: 1;
+  pointer-events: none;
 }

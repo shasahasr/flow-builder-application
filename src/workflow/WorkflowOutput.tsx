@@ -77,8 +77,10 @@ const WorkflowOutput: React.FC = () => {
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        overflow: 'hidden',
-        background: '#f5f5f5'
+        background: '#ffffff',
+        borderRadius: '8px',
+        margin: '10px',
+        boxShadow: '0 2px 10px rgba(0,0,0,0.05)'
       }}
     >
       {/* Chat header */}
@@ -126,7 +128,7 @@ const WorkflowOutput: React.FC = () => {
         </button>
       </div>
 
-      {/* Chat messages */}
+      {/* Chat messages - scrollable container with fixed height */}
       <div
         style={{
           flexGrow: 1,
@@ -134,7 +136,9 @@ const WorkflowOutput: React.FC = () => {
           overflowY: 'auto',
           display: 'flex',
           flexDirection: 'column',
-          gap: '16px'
+          gap: '16px',
+          maxHeight: '500px' /* Fixed height to ensure scrolling */,
+          height: '500px'
         }}
       >
         {chatMessages.length > 0 ? (

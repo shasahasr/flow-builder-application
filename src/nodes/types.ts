@@ -5,12 +5,18 @@ import type { DisplayMessageNodeData } from './DisplayMessageNode'
 import type { InputParameterNodeData } from './InputParameterNode'
 import type { ApiCallNodeData } from './ApiCallNode'
 import type { ConditionNodeData } from './ConditionNode'
+import type { YesNoConditionNodeData } from './YesNoConditionNode'
 
 export type PositionLoggerNode = Node<{ label: string }, 'position-logger'>
 
 // Define a type for the city input node data
 export type CityInputNodeData = {
-  label: string
+  label?: string
+  name?: string
+  question?: string
+  paramName?: string
+  saveAsVariable?: boolean
+  variableName?: string
   value?: string // Added value to store the input
 }
 
@@ -40,6 +46,10 @@ export type InputParameterNodeType = Node<
 >
 export type ApiCallNodeType = Node<ApiCallNodeData, 'api_call'>
 export type ConditionNodeType = Node<ConditionNodeData, 'condition'>
+export type YesNoConditionNodeType = Node<
+  YesNoConditionNodeData,
+  'yes_no_condition'
+>
 
 // Update AppNode to include the more specific CityInputNode and other node types
 export type AppNode =
@@ -51,6 +61,7 @@ export type AppNode =
   | InputParameterNodeType
   | ApiCallNodeType
   | ConditionNodeType
+  | YesNoConditionNodeType
   | Node<{ label?: string | undefined; [key: string]: unknown }, 'default'>
   | Node<{ label?: string | undefined; [key: string]: unknown }, 'output'>
   | Node<{ label?: string | undefined; [key: string]: unknown }, 'group'>

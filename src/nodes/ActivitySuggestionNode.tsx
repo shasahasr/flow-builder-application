@@ -39,14 +39,25 @@ const fetchSuggestionsFromOpenAI = async (
   )
 
   try {
+    // Check if we're using a project-based API key (starts with 'sk-proj-')
+    // New format requires slightly different headers
+    const isProjectKey = OPENAI_API_KEY.startsWith('sk-proj-')
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${OPENAI_API_KEY}`
+    }
+
+    // Add 'OpenAI-Beta: assistants=v1' header for project-based keys if needed
+    if (isProjectKey) {
+      console.log('Using project-based OpenAI API key format')
+    }
+
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${OPENAI_API_KEY}`
-      },
+      headers,
       body: JSON.stringify({
-        model: 'gpt-4o', // Or your preferred model, e.g., "gpt-4"
+        model: 'gpt-3.5-turbo', // Fallback to a more widely available model
         messages: [
           {
             role: 'system',
@@ -63,12 +74,26 @@ const fetchSuggestionsFromOpenAI = async (
     })
 
     if (!response.ok) {
-      const errorData = await response.json()
-      console.error('OpenAI API Error:', errorData)
-      throw new Error(
-        errorData.error?.message ||
-          `OpenAI API request failed with status ${response.status}`
-      )
+      let errorMessage = `OpenAI API request failed with status ${response.status}`
+      try {
+        const errorData = await response.json()
+        console.error('OpenAI API Error:', errorData)
+
+        if (errorData.error?.message) {
+          errorMessage = errorData.error.message
+        } else if (errorData.error?.code) {
+          errorMessage = `Error ${errorData.error.code}: ${
+            errorData.error.message || 'Unknown error'
+          }`
+        } else if (errorData.message) {
+          errorMessage = errorData.message
+        }
+      } catch (jsonError) {
+        console.error('Failed to parse error response:', jsonError)
+        // Just use the status code message if we can't parse the JSON
+      }
+
+      throw new Error(errorMessage)
     }
 
     const data = await response.json()
@@ -79,7 +104,24 @@ const fetchSuggestionsFromOpenAI = async (
     }
   } catch (error) {
     console.error('Error fetching suggestions from OpenAI:', error)
-    throw error // Re-throw to be caught by the calling useEffect
+
+    // Provide fallback suggestions based on temperature range
+    let fallbackSuggestion = ''
+    if (tempF >= 80) {
+      fallbackSuggestion =
+        "Activity: Since it's quite hot, consider indoor activities like visiting museums, shopping centers, or enjoying a water park or pool if available.\n\nClothing: Wear light, breathable fabrics like cotton or linen. Shorts, t-shirts, sundresses, and don't forget a hat and sunscreen!"
+    } else if (tempF >= 65) {
+      fallbackSuggestion =
+        'Activity: The weather is pleasant! Great for outdoor dining, parks, hiking, or sightseeing around the city.\n\nClothing: Light layers work best - a t-shirt with a light jacket or sweater that you can remove if it gets warmer.'
+    } else if (tempF >= 45) {
+      fallbackSuggestion =
+        "Activity: The weather is a bit cool. Consider visiting indoor attractions, coffee shops, or light outdoor activities if dressed appropriately.\n\nClothing: You'll need layers - jeans or pants, a long-sleeve shirt, and a medium-weight jacket."
+    } else {
+      fallbackSuggestion =
+        "Activity: It's cold! Indoor activities are best - museums, theaters, restaurants, or indoor shopping.\n\nClothing: Bundle up with a heavy coat, scarf, gloves, and a hat. Layer underneath with warm sweaters."
+    }
+
+    return `(Using offline suggestions)\n\n${fallbackSuggestion}`
   }
 }
 

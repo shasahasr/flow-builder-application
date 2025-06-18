@@ -118,6 +118,9 @@ function DisplayMessageNode ({ data, isConnectable, id }: NodeProps) {
           }}
           placeholder='Enter message to display to user...'
         />
+        <div style={{ fontSize: '11px', color: '#666', marginTop: '5px' }}>
+          Use ${'variableName'} to include variables. Example: Hello ${'name'}!
+        </div>
       </div>
 
       {/* Output handle */}

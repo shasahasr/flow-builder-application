@@ -1,95 +1,232 @@
-import { useCallback } from 'react'
-import { Handle, Position, type NodeProps, type Node } from '@xyflow/react'
+import { useState, useEffect } from 'react'
+import { Handle, Position, useReactFlow, type NodeProps } from '@xyflow/react'
+import { type CityInputNodeData } from './types'
 
-// Define the specific properties for our node's data
-export interface CityInputNodeSpecificData {
-  // Added export
-  label: string
-  value?: string
-  onValueChange?: (value: string) => void
-}
-
-// Intersect with Record<string, unknown> to satisfy React Flow's constraints
-// while keeping our specific properties strongly typed.
-type CityInputNodeData = CityInputNodeSpecificData & Record<string, unknown>
-
-// Define the full Node type for this custom node.
-// 'input' should match the type string used when registering this node type.
-type CustomCityNode = Node<CityInputNodeData, 'input'>
-
-// Use NodeProps with our full custom node type for strong typing
-function CityInputNode ({ data, id, isConnectable }: NodeProps<CustomCityNode>) {
-  const onChange = useCallback(
-    (evt: React.ChangeEvent<HTMLInputElement>) => {
-      // Accessing our specific properties is still type-safe
-      const specificData = data as CityInputNodeSpecificData
-      if (specificData.onValueChange) {
-        specificData.onValueChange(evt.target.value)
-      } else {
-        console.warn(
-          `CityInputNode (id: ${id}): onValueChange callback is not defined in data prop. Input changes will be local only.`
-        )
-      }
-    },
-    [id, data] // data is now a stable dependency
+// City Input node component optimized for weather location input
+function CityInputNode ({ data, id, isConnectable }: NodeProps) {
+  const [name, setName] = useState('City Input')
+  const [question, setQuestion] = useState(
+    'What city would you like weather information for?'
   )
+  const [paramName, setParamName] = useState('location')
+  const [saveAsVariable, setSaveAsVariable] = useState(true)
+  const [variableName, setVariableName] = useState('location')
+  const { setNodes } = useReactFlow()
 
-  // Accessing our specific properties for rendering
-  const { label, value } = data as CityInputNodeSpecificData
+  // Initialize state from data when component mounts or data changes
+  useEffect(() => {
+    if (data && typeof data === 'object') {
+      if ('name' in data && data.name) setName(data.name as string)
+      if ('question' in data && data.question)
+        setQuestion(data.question as string)
+      if ('paramName' in data && data.paramName)
+        setParamName(data.paramName as string)
+      if ('saveAsVariable' in data && data.saveAsVariable !== undefined)
+        setSaveAsVariable(data.saveAsVariable as boolean)
+      if ('variableName' in data && data.variableName)
+        setVariableName(data.variableName as string)
+    }
+  }, [data])
+
+  // Handle name change
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value
+    setName(newValue)
+    updateNodeData({ name: newValue })
+  }
+
+  // Handle question change
+  const handleQuestionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value
+    setQuestion(newValue)
+    updateNodeData({ question: newValue })
+  }
+
+  // Handle parameter name change
+  const handleParamNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value
+    setParamName(newValue)
+    updateNodeData({ paramName: newValue })
+  }
+
+  // Handle save as variable change
+  const handleSaveAsVariableChange = (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const checked = e.target.checked
+    setSaveAsVariable(checked)
+    updateNodeData({ saveAsVariable: checked })
+  }
+
+  // Handle variable name change
+  const handleVariableNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value
+    setVariableName(newValue)
+    updateNodeData({ variableName: newValue })
+  }
+
+  // Helper function to update node data in the flow
+  const updateNodeData = (newData: Record<string, unknown>) => {
+    setNodes(nds =>
+      nds.map(node => {
+        if (node.id === id) {
+          return {
+            ...node,
+            data: { ...node.data, ...newData }
+          }
+        }
+        return node
+      })
+    )
+  }
 
   return (
     <div
       style={{
-        border: '1px solid #ddd',
         padding: '15px',
-        borderRadius: '8px',
-        background: 'white',
-        width: 250,
-        boxShadow: '0 2px 5px rgba(0,0,0,0.1)'
+        borderRadius: '5px',
+        border: '1px solid #ddd',
+        background: '#e3f2fd', // Light blue background for weather/location theme
+        width: 280,
+        fontSize: '12px',
+        boxSizing: 'border-box'
       }}
     >
+      {/* Input handle */}
       <Handle
         type='target'
         position={Position.Top}
-        isConnectable={isConnectable}
         style={{ background: '#555' }}
+        isConnectable={isConnectable}
       />
+
       <div style={{ marginBottom: '10px' }}>
         <label
-          htmlFor={`city-input-${id}`}
-          style={{
-            display: 'block',
-            fontWeight: 'bold',
-            marginBottom: '5px',
-            color: '#333',
-            textAlign: 'center' // Added to center the label text
-          }}
+          style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px' }}
         >
-          {label || 'City Input'}:
+          Block Name:
         </label>
         <input
-          id={`city-input-${id}`}
-          name='city-input'
-          value={value || ''}
-          onChange={onChange}
-          className='nodrag'
+          type='text'
+          value={name}
+          onChange={handleNameChange}
           style={{
             width: '100%',
-            padding: '10px',
-            border: '1px solid #ccc',
+            padding: '8px',
             borderRadius: '4px',
-            boxSizing: 'border-box',
-            fontSize: '14px',
-            textAlign: 'center' // Added to center the input/placeholder text
+            border: '1px solid #ddd',
+            boxSizing: 'border-box'
           }}
-          placeholder='E.g., London, New York'
         />
       </div>
+
+      <div style={{ marginBottom: '10px' }}>
+        <label
+          style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px' }}
+        >
+          Question:
+        </label>
+        <input
+          type='text'
+          value={question}
+          onChange={handleQuestionChange}
+          style={{
+            width: '100%',
+            padding: '8px',
+            borderRadius: '4px',
+            border: '1px solid #ddd',
+            boxSizing: 'border-box'
+          }}
+          placeholder='What city would you like to check?'
+        />
+      </div>
+
+      <div style={{ marginBottom: '10px' }}>
+        <label
+          style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px' }}
+        >
+          Parameter Name:
+        </label>
+        <input
+          type='text'
+          value={paramName}
+          onChange={handleParamNameChange}
+          style={{
+            width: '100%',
+            padding: '8px',
+            borderRadius: '4px',
+            border: '1px solid #ddd',
+            boxSizing: 'border-box'
+          }}
+        />
+      </div>
+
+      <div style={{ marginBottom: '10px' }}>
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            fontWeight: 'bold'
+          }}
+        >
+          <input
+            type='checkbox'
+            checked={saveAsVariable}
+            onChange={handleSaveAsVariableChange}
+            style={{ marginRight: '8px' }}
+          />
+          Save as variable
+        </label>
+      </div>
+
+      {saveAsVariable && (
+        <div style={{ marginBottom: '10px' }}>
+          <label
+            style={{
+              display: 'block',
+              fontWeight: 'bold',
+              marginBottom: '5px'
+            }}
+          >
+            Variable Name:
+          </label>
+          <input
+            type='text'
+            value={variableName}
+            onChange={handleVariableNameChange}
+            style={{
+              width: '100%',
+              padding: '8px',
+              borderRadius: '4px',
+              border: '1px solid #ddd',
+              boxSizing: 'border-box'
+            }}
+          />
+          <div style={{ fontSize: '11px', color: '#666', marginTop: '5px' }}>
+            Access with: ${'{' + variableName + '}'}
+          </div>
+        </div>
+      )}
+
+      <div
+        style={{
+          backgroundColor: '#e1f5fe',
+          padding: '8px',
+          borderRadius: '4px',
+          marginBottom: '10px',
+          fontSize: '11px'
+        }}
+      >
+        <strong>Tip:</strong> This node is optimized for asking users about a
+        city or location for weather data. Use this with Open-Meteo API calls.
+      </div>
+
+      {/* Output handle */}
       <Handle
         type='source'
         position={Position.Bottom}
-        isConnectable={isConnectable}
         style={{ background: '#555' }}
+        isConnectable={isConnectable}
       />
     </div>
   )

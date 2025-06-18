@@ -3,11 +3,15 @@ import React, {
   useContext,
   useState,
   useCallback,
-  useRef
+  useRef,
+  useEffect
 } from 'react'
 import { Edge } from '@xyflow/react'
 import { AppNode } from '../nodes/types'
 import { WorkflowUtils } from './WorkflowUtils'
+import { useAuth } from '@clerk/clerk-react'
+import { getUserIdOrDefault } from '../auth/userUtils'
+// Removed Supabase import to use only localStorage
 
 // Chat message structure
 export interface ChatMessage {
@@ -25,13 +29,15 @@ interface WorkflowContextType {
   executeWorkflow: (nodes: AppNode[], edges: Edge[]) => Promise<void>
   saveWorkflow: (name: string, nodes: AppNode[], edges: Edge[]) => void
   loadWorkflow: (name: string) => { nodes: AppNode[]; edges: Edge[] } | null
+  deleteWorkflow: (name: string) => boolean
+  updateWorkflowName: (oldName: string, newName: string) => boolean
   savedWorkflows: string[]
   clearOutput: () => void
   submitUserInput: (text: string) => void
 }
 
 // Create the context with default values
-const WorkflowContext = createContext<WorkflowContextType>({
+export const WorkflowContext = createContext<WorkflowContextType>({
   workflowState: {},
   workflowOutput: [],
   isExecuting: false,
@@ -39,6 +45,8 @@ const WorkflowContext = createContext<WorkflowContextType>({
   executeWorkflow: async () => {},
   saveWorkflow: () => {},
   loadWorkflow: () => null,
+  deleteWorkflow: () => false,
+  updateWorkflowName: () => false,
   savedWorkflows: [],
   clearOutput: () => {},
   submitUserInput: () => {}
@@ -54,25 +62,51 @@ const SAVED_WORKFLOWS_KEY = 'ai_agent_saved_workflows'
 export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
   children
 }) => {
+  const { userId } = useAuth()
+  const currentUserId = getUserIdOrDefault(userId)
   const [workflowState, setWorkflowState] = useState<Record<string, unknown>>(
     {}
   )
   const [workflowOutput, setWorkflowOutput] = useState<string[]>([])
   const [isExecuting, setIsExecuting] = useState(false)
   const [waitingForUserInput, setWaitingForUserInput] = useState(false)
-  const [savedWorkflows, setSavedWorkflows] = useState<string[]>(() => {
-    // Initialize from localStorage if available
-    const saved = localStorage.getItem(SAVED_WORKFLOWS_KEY)
-    if (saved) {
+  const [savedWorkflows, setSavedWorkflows] = useState<string[]>([])
+  const [loadingSavedWorkflows, setLoadingSavedWorkflows] = useState(false)
+
+  // Load saved workflows when user changes
+  useEffect(() => {
+    const fetchSavedWorkflows = async () => {
+      setLoadingSavedWorkflows(true)
+
       try {
-        const parsed = JSON.parse(saved)
-        return Object.keys(parsed)
-      } catch (e) {
-        return []
+        // Always load from localStorage in this simplified version
+        loadFromLocalStorage()
+      } catch (error) {
+        console.error('Error in fetchSavedWorkflows:', error)
+        setSavedWorkflows([])
+      } finally {
+        setLoadingSavedWorkflows(false)
       }
     }
-    return []
-  })
+
+    // Helper to load from localStorage
+    const loadFromLocalStorage = () => {
+      // Initialize from localStorage if available
+      const saved = localStorage.getItem(SAVED_WORKFLOWS_KEY)
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved)
+          setSavedWorkflows(Object.keys(parsed))
+        } catch (e) {
+          setSavedWorkflows([])
+        }
+      } else {
+        setSavedWorkflows([])
+      }
+    }
+
+    fetchSavedWorkflows()
+  }, [currentUserId])
 
   // Use refs to store callback functions for handling user input
   const userInputResolveRef = useRef<((value: string) => void) | null>(null)
@@ -95,8 +129,19 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [])
 
-  // Save workflow to localStorage
+  // Save workflow to localStorage only
   const saveWorkflow = useCallback(
+    (name: string, nodes: AppNode[], edges: Edge[]) => {
+      console.log(`Saving workflow "${name}" for user ${currentUserId}`)
+
+      // Always save to localStorage in this simplified version
+      saveToLocalStorage(name, nodes, edges)
+    },
+    [currentUserId]
+  )
+
+  // Helper function to save to localStorage
+  const saveToLocalStorage = useCallback(
     (name: string, nodes: AppNode[], edges: Edge[]) => {
       // Get existing saved workflows
       const existingSaved = localStorage.getItem(SAVED_WORKFLOWS_KEY)
@@ -122,8 +167,8 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
     []
   )
 
-  // Load workflow from localStorage
-  const loadWorkflow = useCallback((name: string) => {
+  // Helper function to load from localStorage
+  const loadFromLocalStorage = useCallback((name: string) => {
     const existingSaved = localStorage.getItem(SAVED_WORKFLOWS_KEY)
     if (!existingSaved) return null
 
@@ -138,11 +183,22 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
         }
       }
     } catch (e) {
-      console.error('Error loading workflow', e)
+      console.error('Error loading workflow from localStorage:', e)
     }
 
     return null
   }, [])
+
+  // Load workflow from localStorage only
+  const loadWorkflow = useCallback(
+    (name: string) => {
+      console.log(`Loading workflow "${name}" for user ${currentUserId}`)
+
+      // Always load from localStorage in this simplified version
+      return loadFromLocalStorage(name)
+    },
+    [currentUserId, loadFromLocalStorage]
+  )
 
   // Helper function to process a message with variable replacements
   const processMessage = useCallback(
@@ -168,7 +224,7 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // Function to wait for user input (will be connected to the chat UI)
   const waitForUserInput = useCallback(
-    (question: string, paramName: string): Promise<string> => {
+    (question: string, _paramName: string): Promise<string> => {
       // Add the question to the output as an assistant message
       addOutputMessage(question, 'assistant')
 
@@ -220,11 +276,31 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
             `Please provide a value for ${paramName}:`
           question = processMessage(question, contextData)
 
+          // Check if we should save as a custom variable
+          const saveAsVariable = node.data?.saveAsVariable as boolean
+          let variableName = node.data?.variableName as string
+
+          // If no custom variable name is provided, use the parameter name
+          if (saveAsVariable && (!variableName || variableName.trim() === '')) {
+            variableName = paramName
+          }
+
           // Wait for user input
           const userInput = await waitForUserInput(question, paramName)
 
           // Store the user's input in the context
           nextContextData[paramName] = userInput
+
+          // If saveAsVariable is true, also store with the custom variable name
+          if (saveAsVariable && variableName && variableName !== paramName) {
+            nextContextData[variableName] = userInput
+
+            // Add a notification that the variable was saved
+            addOutputMessage(
+              `Input saved as variable: ${variableName} = "${userInput}"`,
+              'assistant'
+            )
+          }
           break
         }
 
@@ -232,22 +308,28 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
           try {
             // Get API details from node data
             let url = 'unspecified endpoint'
-            let method = 'GET'
             let payload = '{}'
-            let apiKey = ''
             let responsePath = ''
             let resultMessage = 'API call result: ${result}'
+            let saveAsVariable = false
+            let variableName = 'apiResponse'
+            let selectedFunction = ''
+            let apiType = ''
 
             if (node.data && typeof node.data === 'object') {
               if ('url' in node.data) url = node.data.url as string
-              if ('method' in node.data)
-                method = (node.data.method as string) || 'GET'
               if ('payload' in node.data) payload = node.data.payload as string
-              if ('apiKey' in node.data) apiKey = node.data.apiKey as string
               if ('responsePath' in node.data)
                 responsePath = node.data.responsePath as string
               if ('resultMessage' in node.data)
                 resultMessage = node.data.resultMessage as string
+              if ('saveAsVariable' in node.data)
+                saveAsVariable = node.data.saveAsVariable as boolean
+              if ('variableName' in node.data)
+                variableName = node.data.variableName as string
+              if ('apiType' in node.data) apiType = node.data.apiType as string
+              if ('selectedFunction' in node.data)
+                selectedFunction = node.data.selectedFunction as string
             }
 
             // Process any variables in the URL, payload and other fields
@@ -255,42 +337,305 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
             payload = processMessage(payload, contextData)
             resultMessage = processMessage(resultMessage, contextData)
 
-            // Add a message showing we're making the API call
-            addOutputMessage(`Making API call to ${url}...`, 'assistant')
+            // Include selected function in the message if available
+            const functionDetail = selectedFunction
+              ? ` (function: ${selectedFunction})`
+              : ''
 
-            // Simulate API call
+            // Skip the API call message in the chat output, log to console only
+            console.log(`Making API call to ${url}${functionDetail}...`)
+
+            // Parse the payload
+            let payloadObj = {}
+            try {
+              if (payload && payload.trim() !== '') {
+                payloadObj = JSON.parse(payload)
+              }
+            } catch (error) {
+              // Only log parsing errors to console, not to chat output
+              console.error(`Error parsing payload JSON: ${error}`)
+              throw new Error(`Invalid payload JSON: ${error}`)
+            }
+
+            // Make a real API call
             let responseData
+            try {
+              // Import OpenAI API key from environment
+              const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY
 
-            // In a real app we would do a real fetch here
-            // For now, simulate with a delay
-            await new Promise(resolve => setTimeout(resolve, 1500))
-
-            // Create a mock response based on the API config
-            if (url.includes('weather')) {
-              // Mock weather API response
-              const cityMatch =
-                url.match(/city=([^&]+)/) ||
-                payload.match(/city[":]\s*["']?([^"',]+)/)
-              const city = cityMatch ? cityMatch[1] : 'New York'
-
-              responseData = {
-                location: {
-                  name: city,
-                  country: city === 'London' ? 'UK' : 'USA'
-                },
-                current: {
-                  temperature: Math.round(15 + Math.random() * 20),
-                  conditions: ['sunny', 'cloudy', 'rainy'][
-                    Math.floor(Math.random() * 3)
-                  ]
+              // Create request options with appropriate HTTP method
+              const requestOptions: RequestInit = {
+                method: apiType === 'openmeteo' ? 'GET' : 'POST',
+                headers: {
+                  'Content-Type': 'application/json'
                 }
               }
-            } else {
-              // Generic mock response
-              responseData = {
-                success: true,
-                data: {
-                  message: `Response from ${url}`,
+
+              // Add API key for ChatGPT API calls
+              if (apiType === 'chatgpt') {
+                if (!OPENAI_API_KEY) {
+                  throw new Error(
+                    'OpenAI API key not found in environment variables. Please set VITE_OPENAI_API_KEY in your .env file.'
+                  )
+                }
+
+                // Check if we're using a project-based API key (starts with 'sk-proj-')
+                const isProjectKey = OPENAI_API_KEY.startsWith('sk-proj-')
+                if (isProjectKey) {
+                  console.log('Using project-based OpenAI API key format')
+                }
+
+                requestOptions.headers = {
+                  ...requestOptions.headers,
+                  Authorization: `Bearer ${OPENAI_API_KEY}`
+                }
+
+                // Update model in payload to a more widely available one if it's gpt-4o
+                if (
+                  payloadObj &&
+                  typeof payloadObj === 'object' &&
+                  'model' in payloadObj
+                ) {
+                  const model = payloadObj.model as string
+                  if (model === 'gpt-4o') {
+                    console.log(
+                      'Replacing gpt-4o with gpt-3.5-turbo for better compatibility'
+                    )
+                    ;(payloadObj as Record<string, unknown>).model =
+                      'gpt-3.5-turbo'
+                  }
+                }
+              }
+
+              // Handle payload differently based on API type
+              if (apiType === 'chatgpt' && Object.keys(payloadObj).length > 0) {
+                // For ChatGPT, include payload in request body
+                requestOptions.body = JSON.stringify(payloadObj)
+              } else if (
+                apiType === 'openmeteo' &&
+                Object.keys(payloadObj).length > 0
+              ) {
+                // For Open-Meteo with a location parameter, convert to lat/lon first
+                if ('location' in payloadObj) {
+                  try {
+                    // Save the location name for later reference
+                    const locationName = String(payloadObj.location)
+                    console.log(
+                      `Converting location "${locationName}" to coordinates...`
+                    )
+
+                    // Use the Open-Meteo Geocoding API to convert the location name to coordinates
+                    const geocodingUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
+                      locationName
+                    )}&count=1`
+
+                    // Make the geocoding request first
+                    const geocodeResponse = await fetch(geocodingUrl)
+
+                    if (geocodeResponse.ok) {
+                      const geocodeData = await geocodeResponse.json()
+
+                      // Check if we got valid results
+                      if (
+                        geocodeData.results &&
+                        geocodeData.results.length > 0
+                      ) {
+                        const { latitude, longitude } = geocodeData.results[0]
+                        console.log(
+                          `Found coordinates: lat=${latitude}, lon=${longitude} for "${locationName}"`
+                        )
+
+                        // Replace location with latitude and longitude in the payload
+                        delete (payloadObj as Record<string, unknown>).location
+                        ;(payloadObj as Record<string, unknown>).latitude =
+                          latitude
+                        ;(payloadObj as Record<string, unknown>).longitude =
+                          longitude
+                      } else {
+                        console.error(
+                          `No coordinates found for location "${locationName}"`
+                        )
+                        // Use some defaults since we couldn't find the place
+                        ;(
+                          payloadObj as Record<string, unknown>
+                        ).latitude = 40.7128 // New York
+                        ;(payloadObj as Record<string, unknown>).longitude =
+                          -74.006
+                      }
+                    } else {
+                      console.error(
+                        `Geocoding API error: ${geocodeResponse.statusText}`
+                      )
+                      // Use some defaults if geocoding fails
+                      ;(
+                        payloadObj as Record<string, unknown>
+                      ).latitude = 40.7128 // New York
+                      ;(payloadObj as Record<string, unknown>).longitude =
+                        -74.006
+                    }
+                  } catch (geoError) {
+                    console.error(`Error during geocoding: ${geoError}`)
+                    // Use some defaults if geocoding fails
+                    ;(payloadObj as Record<string, unknown>).latitude = 40.7128 // New York
+                    ;(payloadObj as Record<string, unknown>).longitude = -74.006
+                  }
+                }
+
+                // Now convert payload to URL parameters
+                const urlParams = new URLSearchParams()
+                Object.entries(payloadObj).forEach(([key, value]) => {
+                  urlParams.append(key, String(value))
+                })
+
+                // Append parameters to URL
+                url = `${url}?${urlParams.toString()}`
+                // Log only to console for debugging
+                console.log(`Using URL with parameters: ${url}`)
+              }
+
+              // We'll skip the API call message to make the flow more seamless
+              // Only log to console for debugging
+              console.log(`Making API call to ${url} (${apiType})...`)
+
+              // Make the fetch call with CORS handling
+              let response
+              try {
+                response = await fetch(url, requestOptions)
+              } catch (corsError) {
+                console.error('CORS error, trying proxy:', corsError)
+
+                // Try multiple CORS-friendly proxies for Open-Meteo (GET) requests only
+                if (apiType === 'openmeteo') {
+                  const corsProxies = [
+                    `https://cors-anywhere.herokuapp.com/${url}`,
+                    `https://api.allorigins.win/raw?url=${encodeURIComponent(
+                      url
+                    )}`,
+                    `https://cors-proxy.htmldriven.com/?url=${encodeURIComponent(
+                      url
+                    )}`
+                  ]
+
+                  for (const proxyUrl of corsProxies) {
+                    try {
+                      console.log(
+                        `API call with direct URL failed. Trying CORS proxy...`
+                      )
+
+                      const proxyOptions = { ...requestOptions }
+                      if (proxyOptions.headers) {
+                        // Add the required header for some CORS proxies
+                        proxyOptions.headers = {
+                          ...proxyOptions.headers,
+                          'X-Requested-With': 'XMLHttpRequest'
+                        }
+                      }
+
+                      response = await fetch(proxyUrl, proxyOptions)
+                      if (response.ok) {
+                        console.log(`Successfully connected using CORS proxy`)
+                        break
+                      }
+                    } catch (err) {
+                      console.error(`Proxy attempt failed: ${err}`)
+                    }
+                  }
+                } else {
+                  // For ChatGPT API, we can't easily use CORS proxies
+                  throw new Error(
+                    `CORS error for ${apiType} API request. Consider enabling CORS on the API or using a server-side proxy.`
+                  )
+                }
+
+                // If all proxies failed
+                if (!response || !response.ok) {
+                  throw new Error(
+                    `Failed to make API call through direct URL and proxies`
+                  )
+                }
+              }
+
+              // Check if response is ok
+              if (!response.ok) {
+                throw new Error(
+                  `API returned status ${response.status}: ${response.statusText}`
+                )
+              }
+
+              // Parse the response
+              responseData = await response.json()
+
+              // Log successful response to console only
+              console.log(
+                `Received response from API. Status: ${response.status}`
+              )
+            } catch (error) {
+              // If the API call fails, log to console and create a fallback response
+              console.error(`API call failed: ${error}. Using fallback data.`)
+
+              // Add a user-friendly error message - make it simple and non-technical
+              addOutputMessage(
+                `I'll show you some example information instead:`,
+                'assistant'
+              )
+
+              // Fall back to mock data if the real API call fails
+              if (selectedFunction) {
+                // Create mock response based on the selected function
+                switch (selectedFunction) {
+                  case 'getUserData':
+                    responseData = {
+                      success: true,
+                      data: {
+                        id: 'user123',
+                        name: 'Alex Johnson',
+                        email: 'alex@example.com',
+                        preferences: {
+                          theme: 'dark',
+                          notifications: true
+                        }
+                      }
+                    }
+                    break
+                  case 'getWeatherForecast':
+                    responseData = {
+                      success: true,
+                      data: {
+                        location: 'New York',
+                        current: {
+                          temperature: 72,
+                          conditions: 'partly cloudy',
+                          humidity: 45
+                        },
+                        forecast: [
+                          {
+                            day: 'Monday',
+                            high: 75,
+                            low: 62,
+                            conditions: 'sunny'
+                          },
+                          {
+                            day: 'Tuesday',
+                            high: 70,
+                            low: 60,
+                            conditions: 'rain'
+                          }
+                        ]
+                      }
+                    }
+                    break
+                  default:
+                    responseData = {
+                      success: false,
+                      error: `API call failed: ${error}`,
+                      timestamp: new Date().toISOString()
+                    }
+                }
+              } else {
+                // Generic fallback response
+                responseData = {
+                  success: false,
+                  error: `API call failed: ${error}`,
                   timestamp: new Date().toISOString()
                 }
               }
@@ -299,14 +644,22 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
             // Store the full response in the context
             nextContextData['apiResponse'] = responseData
 
+            // If saveAsVariable is true, store with the specified variable name
+            if (saveAsVariable && variableName) {
+              nextContextData[variableName] = responseData
+
+              // Log to console only
+              console.log(`API response saved as variable: ${variableName}`)
+            }
+
             // Extract specific data if a response path is provided
-            let result = responseData
+            let result: unknown = responseData
             if (responsePath) {
               try {
                 const pathParts = responsePath.split('.')
                 for (const part of pathParts) {
                   if (result && typeof result === 'object') {
-                    result = result[part]
+                    result = (result as Record<string, unknown>)[part]
                   }
                 }
               } catch (e) {
@@ -317,29 +670,185 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
             // Store the extracted result separately
             nextContextData['result'] = result
 
-            // Format the result message with the extracted data
-            const finalResultMessage = WorkflowUtils.evaluateExpression(
-              resultMessage,
-              { ...contextData, result }
-            )
+            // If saveAsVariable is true, also store the extracted result
+            if (saveAsVariable && variableName) {
+              // Store the actual result in a result property
+              nextContextData[`${variableName}_result`] = result
+            }
+
+            // Format the result message based on the API type
+            let finalResultMessage = ''
+
+            // For ChatGPT text responses, just output the content directly
+            if (apiType === 'chatgpt' && selectedFunction === 'Generate Text') {
+              finalResultMessage = (result as string) || 'No response received'
+            }
+            // For ChatGPT image responses, provide a link
+            else if (
+              apiType === 'chatgpt' &&
+              selectedFunction === 'Generate Image'
+            ) {
+              const imageUrl = result as string
+              finalResultMessage = imageUrl
+                ? `Here's your generated image: ${imageUrl}`
+                : 'Image generation failed'
+            }
+            // For OpenMeteo, format the weather data in a user-friendly way
+            else if (apiType === 'openmeteo') {
+              if (typeof result === 'object' && result !== null) {
+                // Format weather data in a conversational way
+                if (selectedFunction === 'Current Weather') {
+                  try {
+                    const weather = result as Record<string, unknown>
+                    const temperature =
+                      (weather.temperature as number) ||
+                      (weather.temperature_2m as number)
+                    const weatherCode = weather.weathercode as number
+                    const windSpeed =
+                      (weather.windspeed as number) ||
+                      (weather.wind_speed as number)
+
+                    let weatherCondition = 'clear'
+                    if (weatherCode >= 1 && weatherCode <= 3)
+                      weatherCondition = 'partly cloudy'
+                    else if (weatherCode >= 45 && weatherCode <= 48)
+                      weatherCondition = 'foggy'
+                    else if (weatherCode >= 51 && weatherCode <= 67)
+                      weatherCondition = 'rainy'
+                    else if (weatherCode >= 71 && weatherCode <= 77)
+                      weatherCondition = 'snowy'
+                    else if (weatherCode >= 80 && weatherCode <= 99)
+                      weatherCondition = 'stormy'
+
+                    finalResultMessage = `The current weather is ${weatherCondition}`
+                    if (temperature !== undefined)
+                      finalResultMessage += ` with a temperature of ${temperature}°C`
+                    if (windSpeed !== undefined)
+                      finalResultMessage += ` and wind speed of ${windSpeed} km/h`
+                    finalResultMessage += '.'
+                  } catch (e) {
+                    // Fall back to JSON if we can't parse the specific format
+                    finalResultMessage = `Here's the current weather: ${JSON.stringify(
+                      result
+                    )}`
+                  }
+                } else if (selectedFunction === 'Weather Forecast') {
+                  // Define type for weather forecast outside try block
+                  interface WeatherForecast {
+                    daily?: {
+                      weathercode?: number[]
+                      time?: string[]
+                      temperature_2m_max?: number[]
+                      temperature_2m_min?: number[]
+                      [key: string]: unknown
+                    }
+                    [key: string]: unknown
+                  }
+
+                  try {
+                    const weather = result as WeatherForecast
+                    if (weather.daily) {
+                      finalResultMessage = `Weather forecast: `
+                      if (weather.daily.weathercode && weather.daily.time) {
+                        const days = [
+                          'Today',
+                          'Tomorrow',
+                          'In 2 days',
+                          'In 3 days',
+                          'In 4 days'
+                        ]
+                        for (
+                          let i = 0;
+                          i < Math.min(3, weather.daily.time.length);
+                          i++
+                        ) {
+                          const code = weather.daily.weathercode[i]
+                          let condition = 'clear'
+                          if (code >= 1 && code <= 3)
+                            condition = 'partly cloudy'
+                          else if (code >= 45 && code <= 48) condition = 'foggy'
+                          else if (code >= 51 && code <= 67) condition = 'rainy'
+                          else if (code >= 71 && code <= 77) condition = 'snowy'
+                          else if (code >= 80 && code <= 99)
+                            condition = 'stormy'
+
+                          finalResultMessage += `${days[i]}: ${condition}`
+
+                          if (
+                            weather.daily.temperature_2m_max &&
+                            weather.daily.temperature_2m_min
+                          ) {
+                            finalResultMessage += ` (${weather.daily.temperature_2m_min[i]}°C to ${weather.daily.temperature_2m_max[i]}°C)`
+                          }
+
+                          if (i < 2) finalResultMessage += ', '
+                        }
+                      } else {
+                        // Safely stringify the daily object
+                        finalResultMessage += JSON.stringify(weather.daily)
+                      }
+                    } else {
+                      finalResultMessage = `Forecast data: ${JSON.stringify(
+                        result
+                      )}`
+                    }
+                  } catch (e) {
+                    finalResultMessage = `Here's the weather forecast: ${JSON.stringify(
+                      result
+                    )}`
+                  }
+                } else {
+                  // For other types of weather data
+                  finalResultMessage = `${selectedFunction} data: ${JSON.stringify(
+                    result,
+                    null,
+                    2
+                  )}`
+                }
+              } else {
+                finalResultMessage = `${selectedFunction} results: ${result}`
+              }
+            }
+            // Default case: use the raw result or a custom message
+            else {
+              finalResultMessage = WorkflowUtils.evaluateExpression(
+                resultMessage,
+                { ...contextData, result }
+              )
+            }
 
             // Add the result message to the output
             addOutputMessage(finalResultMessage, 'assistant')
           } catch (error) {
-            addOutputMessage(`API call failed: ${error}`, 'assistant')
+            // Log error to console only, not to chat output
+            console.error(`API call failed: ${error}`)
+
+            // Add a user-friendly message instead
+            addOutputMessage(
+              "I couldn't complete this request. Let's try something else.",
+              'assistant'
+            )
           }
           break
         }
 
-        case 'condition': {
+        case 'condition':
+        case 'yes_no_condition': {
           // Access condition expression and name from the node data
           let conditionText = 'false'
           let conditionName = 'Condition'
+          let conditionType =
+            node.type === 'yes_no_condition' ? 'yes-no' : 'expression'
 
           if (node.data && typeof node.data === 'object') {
             if ('condition' in node.data)
               conditionText = node.data.condition as string
             if ('name' in node.data) conditionName = node.data.name as string
+            if (
+              'conditionType' in node.data &&
+              node.type === 'yes_no_condition'
+            )
+              conditionType = node.data.conditionType as string
           }
 
           // Process the condition text to replace any variables
@@ -347,6 +856,52 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
 
           let conditionResult = false
           let debugInfo = ''
+
+          // For yes_no_condition node with yes-no condition type, ask the user
+          if (node.type === 'yes_no_condition' && conditionType === 'yes-no') {
+            try {
+              // Ask the user for their answer
+              const userInput = await waitForUserInput(
+                conditionText,
+                'condition_answer'
+              )
+
+              // Check if the user's response is affirmative
+              const response = userInput.toLowerCase().trim()
+              conditionResult = [
+                'yes',
+                'y',
+                'yeah',
+                'yep',
+                'sure',
+                'ok',
+                'okay',
+                'true'
+              ].includes(response)
+
+              console.log(
+                `Yes/No condition '${conditionName}' evaluated: User said "${userInput}" = ${
+                  conditionResult ? 'YES' : 'NO'
+                }`
+              )
+
+              // Store the result in the context
+              nextContextData['condition_result'] = conditionResult
+              nextContextData['condition_answer'] = userInput
+              debugInfo = `User said: "${userInput}"`
+
+              // Skip the standard condition evaluation
+              break
+            } catch (e) {
+              console.error(`Error in yes/no condition: ${e}`)
+              addOutputMessage(
+                `I had trouble processing your answer. Let's continue.`,
+                'assistant'
+              )
+              conditionResult = false
+              break
+            }
+          }
 
           try {
             // First check for common comparison patterns
@@ -441,11 +996,36 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
 
           // Only follow edges with matching condition result
           const outgoingEdges = nodeOutgoingEdges[nodeId] || []
-          const filteredEdges = outgoingEdges.filter(
-            edge =>
-              (conditionResult && edge.sourceHandle === 'true') ||
-              (!conditionResult && edge.sourceHandle === 'false')
-          )
+          const filteredEdges = outgoingEdges.filter(edge => {
+            if (node.type === 'yes_no_condition') {
+              // For yes/no condition nodes, use all handles including side handles
+              // Add debug logging to help trace handle matching
+              const isMatchingYesHandle =
+                conditionResult &&
+                (edge.sourceHandle === 'yes' ||
+                  edge.sourceHandle === 'handle-yes' ||
+                  edge.sourceHandle === 'handle-yes-side')
+              const isMatchingNoHandle =
+                !conditionResult &&
+                (edge.sourceHandle === 'no' ||
+                  edge.sourceHandle === 'handle-no' ||
+                  edge.sourceHandle === 'handle-no-side')
+
+              if (isMatchingYesHandle || isMatchingNoHandle) {
+                console.log(
+                  `Following edge ${edge.id} from yes/no condition node ${nodeId} with handle: ${edge.sourceHandle}, condition result: ${conditionResult}`
+                )
+              }
+
+              return isMatchingYesHandle || isMatchingNoHandle
+            } else {
+              // For regular condition nodes, use 'true' and 'false' handle IDs
+              return (
+                (conditionResult && edge.sourceHandle === 'true') ||
+                (!conditionResult && edge.sourceHandle === 'false')
+              )
+            }
+          })
 
           // Execute all nodes connected to matching condition paths
           for (const edge of filteredEdges) {
@@ -519,6 +1099,76 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
     [executeNode]
   )
 
+  // Helper function to delete from localStorage
+  const deleteFromLocalStorage = useCallback((name: string): boolean => {
+    // Get existing saved workflows
+    const existingSaved = localStorage.getItem(SAVED_WORKFLOWS_KEY)
+    if (!existingSaved) return false
+
+    try {
+      const savedData = JSON.parse(existingSaved)
+      if (!savedData[name]) return false
+
+      // Delete the workflow
+      delete savedData[name]
+
+      // Save back to localStorage
+      localStorage.setItem(SAVED_WORKFLOWS_KEY, JSON.stringify(savedData))
+
+      // Update state
+      setSavedWorkflows(Object.keys(savedData))
+      return true
+    } catch (e) {
+      console.error('Error deleting workflow from localStorage:', e)
+      return false
+    }
+  }, [])
+
+  // Delete a workflow from localStorage only
+  const deleteWorkflow = useCallback(
+    (name: string): boolean => {
+      console.log(`Deleting workflow "${name}" for user ${currentUserId}`)
+
+      // Always delete from localStorage in this simplified version
+      return deleteFromLocalStorage(name)
+    },
+    [currentUserId, deleteFromLocalStorage]
+  )
+
+  // Update workflow name
+  const updateWorkflowName = useCallback(
+    (oldName: string, newName: string): boolean => {
+      if (newName.trim() === '' || oldName === newName) return false
+
+      // Get existing saved workflows
+      const existingSaved = localStorage.getItem(SAVED_WORKFLOWS_KEY)
+      if (!existingSaved) return false
+
+      try {
+        const savedData = JSON.parse(existingSaved)
+        if (!savedData[oldName]) return false
+
+        // Don't overwrite existing workflow with the new name
+        if (savedData[newName]) return false
+
+        // Move workflow data to new name
+        savedData[newName] = savedData[oldName]
+        delete savedData[oldName]
+
+        // Save back to localStorage
+        localStorage.setItem(SAVED_WORKFLOWS_KEY, JSON.stringify(savedData))
+
+        // Update state
+        setSavedWorkflows(Object.keys(savedData))
+        return true
+      } catch (e) {
+        console.error('Error updating workflow name', e)
+        return false
+      }
+    },
+    []
+  )
+
   const contextValue: WorkflowContextType = {
     workflowState,
     workflowOutput,
@@ -527,6 +1177,8 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
     executeWorkflow,
     saveWorkflow,
     loadWorkflow,
+    deleteWorkflow,
+    updateWorkflowName,
     savedWorkflows,
     clearOutput,
     submitUserInput

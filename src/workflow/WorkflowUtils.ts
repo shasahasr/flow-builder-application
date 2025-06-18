@@ -12,12 +12,19 @@ export class WorkflowUtils {
   static evaluateExpression (
     expression: string,
     context: Record<string, any>
-  ): any {
+  ): string {
     // Simple reference pattern: ${nodeId.paramName}
     const refPattern = /\${([^}]+)}/g
 
     return expression.replace(refPattern, (match, path) => {
       try {
+        // Check if the path is directly in the context
+        if (context[path] !== undefined) {
+          const value = context[path]
+          return this.formatValue(value)
+        }
+
+        // Otherwise, handle nested paths
         const pathParts = path.split('.')
         let value = context
 
@@ -26,12 +33,40 @@ export class WorkflowUtils {
           value = value[part]
         }
 
-        return typeof value === 'string' ? value : JSON.stringify(value)
+        return this.formatValue(value)
       } catch (e) {
         console.error('Error evaluating expression:', e)
         return match
       }
     })
+  }
+
+  /**
+   * Format a value for display in a string
+   */
+  static formatValue (value: any): string {
+    if (value === undefined || value === null) {
+      return ''
+    }
+
+    if (typeof value === 'string') {
+      return value
+    }
+
+    if (typeof value === 'number' || typeof value === 'boolean') {
+      return value.toString()
+    }
+
+    if (typeof value === 'object') {
+      try {
+        return JSON.stringify(value, null, 2)
+      } catch (e) {
+        console.error('Error stringifying object:', e)
+        return '[Object]'
+      }
+    }
+
+    return String(value)
   }
 
   /**

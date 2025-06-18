@@ -18,6 +18,7 @@ import { initialNodes, nodeTypes } from './nodes'
 import { initialEdges, edgeTypes } from './edges'
 import type { CityInputNodeSpecificData } from './nodes/CityInputNode'
 import type { AppNode } from './nodes/types'
+import UserProfile from './auth/UserProfile'
 import type {
   WeatherDisplayNodeSpecificData,
   WeatherDisplayNodeData
@@ -337,11 +338,30 @@ export function FlowApp() {
 
   return (
     <WorkflowProvider>
-      <div style={{ display: 'flex', height: '100vh', width: '100vw', flexDirection: 'row' }}>
-        {/* Left side - Flow Builder (50% of screen) */}
-        <div style={{ width: '50%', height: '100%', display: 'flex', flexDirection: 'row' }}>
-          <Sidebar />
-          <div style={{ flexGrow: 1, height: '100%', position: 'relative' }} ref={reactFlowWrapper}>
+      <div style={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        height: '100vh', 
+        width: '100vw',
+        background: '#f5f5f5' // Add explicit background color to entire app
+      }}>
+        {/* Header with user profile */}
+        <div style={{ 
+          display: 'flex',
+          justifyContent: 'flex-end',
+          padding: '12px 20px',
+          borderBottom: '1px solid #e0e0e0',
+          background: '#f5f5f5'
+        }}>
+          <UserProfile />
+        </div>
+        
+        {/* Main content */}
+        <div style={{ display: 'flex', flexGrow: 1, flexDirection: 'row', background: '#ffffff' }}>
+          {/* Left side - Flow Builder (50% of screen) */}
+          <div style={{ width: '50%', height: '100%', display: 'flex', flexDirection: 'row', background: '#fafafa' }}>
+            <Sidebar />
+            <div style={{ flexGrow: 1, height: '100%', position: 'relative', background: '#f5f5f5' }} ref={reactFlowWrapper}>
             <ReactFlow
               nodes={nodes}
               nodeTypes={nodeTypes}
@@ -354,7 +374,11 @@ export function FlowApp() {
               onDragOver={onDragOver}
               fitView
             >
-              <Background />
+              <Background
+                color="#aaa"
+                gap={16}
+                size={1}
+              />
               <MiniMap />
               <Controls />
               <WorkflowControls />
@@ -368,9 +392,11 @@ export function FlowApp() {
           height: '100%',
           borderLeft: '1px solid #ddd',
           display: 'flex',
-          flexDirection: 'column'
+          flexDirection: 'column',
+          background: '#ffffff'
         }}>
           <WorkflowOutput />
+        </div>
         </div>
       </div>
     </WorkflowProvider>
