@@ -1,5 +1,6 @@
 import { NodeProps, Handle, Position, useReactFlow } from '@xyflow/react'
 import { useState, useEffect } from 'react'
+import { nodeStyles, getNodeContainerStyle } from './nodeStyles'
 
 // Define the API call node data structure with direct mapping to fetch parameters
 export type ApiCallNodeData = {
@@ -12,6 +13,9 @@ export type ApiCallNodeData = {
   responsePath?: string // Path to extract from response
   saveAsVariable?: boolean // Whether to save the response as a variable
   variableName?: string // Name of the variable to save the response
+  apiType?: string // Type of API (e.g., 'openmeteo', 'chatgpt')
+  selectedFunction?: string // Selected function for the API
+  resultMessage?: string // Custom result message template
 }
 
 // API Call node component
@@ -222,27 +226,16 @@ function ApiCallNode ({ data, isConnectable, id }: NodeProps) {
   }
 
   return (
-    <div
-      style={{
-        padding: '15px',
-        borderRadius: '5px',
-        border: '1px solid #ddd',
-        background: '#f5f5f5',
-        width: 320,
-        fontSize: '12px',
-        boxSizing: 'border-box',
-        position: 'relative'
-      }}
-    >
+    <div style={getNodeContainerStyle('api')}>
       {/* Input handle */}
       <Handle
         type='target'
         position={Position.Top}
-        style={{ background: '#555' }}
+        style={{ ...nodeStyles.handle, ...nodeStyles.handleInput }}
         isConnectable={isConnectable}
       />
 
-      <div style={{ marginBottom: '10px' }}>
+      <div style={nodeStyles.fieldGroup}>
         <div
           style={{
             display: 'flex',
@@ -250,9 +243,7 @@ function ApiCallNode ({ data, isConnectable, id }: NodeProps) {
             alignItems: 'center'
           }}
         >
-          <label style={{ fontWeight: 'bold', marginBottom: '5px' }}>
-            API Fetch Block
-          </label>
+          <label style={nodeStyles.label}>API Fetch Block</label>
           <div
             style={{
               cursor: 'pointer',
@@ -327,64 +318,33 @@ function ApiCallNode ({ data, isConnectable, id }: NodeProps) {
         )}
       </div>
 
-      <div style={{ marginBottom: '10px' }}>
-        <label
-          style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px' }}
-        >
-          Block Name:
-        </label>
+      <div style={nodeStyles.fieldGroup}>
+        <label style={nodeStyles.label}>Block Name:</label>
         <input
           type='text'
           value={name}
           onChange={handleNameChange}
-          style={{
-            width: '100%',
-            padding: '8px',
-            borderRadius: '4px',
-            border: '1px solid #ddd',
-            boxSizing: 'border-box'
-          }}
+          style={nodeStyles.input}
         />
       </div>
 
-      <div style={{ marginBottom: '10px' }}>
-        <label
-          style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px' }}
-        >
-          API URL:
-        </label>
+      <div style={nodeStyles.fieldGroup}>
+        <label style={nodeStyles.label}>API URL:</label>
         <input
           type='text'
           value={url}
           onChange={handleUrlChange}
-          style={{
-            width: '100%',
-            padding: '8px',
-            borderRadius: '4px',
-            border: '1px solid #ddd',
-            boxSizing: 'border-box'
-          }}
+          style={nodeStyles.input}
           placeholder='https://api.example.com/endpoint'
         />
       </div>
 
-      <div style={{ marginBottom: '10px' }}>
-        <label
-          style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px' }}
-        >
-          HTTP Method:
-        </label>
+      <div style={nodeStyles.fieldGroup}>
+        <label style={nodeStyles.label}>HTTP Method:</label>
         <select
           value={method}
           onChange={handleMethodChange}
-          style={{
-            width: '100%',
-            padding: '8px',
-            borderRadius: '4px',
-            border: '1px solid #ddd',
-            boxSizing: 'border-box',
-            backgroundColor: 'white'
-          }}
+          style={nodeStyles.input}
         >
           <option value='GET'>GET</option>
           <option value='POST'>POST</option>
@@ -396,30 +356,15 @@ function ApiCallNode ({ data, isConnectable, id }: NodeProps) {
         </select>
       </div>
 
-      <div style={{ marginBottom: '10px' }}>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center'
-          }}
-        >
-          <label style={{ fontWeight: 'bold', marginBottom: '5px' }}>
-            Headers:
-          </label>
-        </div>
+      <div style={nodeStyles.fieldGroup}>
+        <label style={nodeStyles.label}>Headers (JSON):</label>
         <textarea
           value={headersStr}
           onChange={handleHeadersChange}
           rows={3}
           style={{
-            width: '100%',
-            padding: '8px',
-            borderRadius: '4px',
-            border: headersError ? '1px solid red' : '1px solid #ddd',
-            fontFamily: 'monospace',
-            boxSizing: 'border-box',
-            resize: 'none'
+            ...nodeStyles.textarea,
+            border: headersError ? '1px solid red' : nodeStyles.textarea.border
           }}
           placeholder='{"Content-Type": "application/json", "Authorization": "Bearer ${API_KEY}"}'
         />
@@ -428,36 +373,23 @@ function ApiCallNode ({ data, isConnectable, id }: NodeProps) {
             {headersError}
           </div>
         )}
-        <div style={{ fontSize: '11px', color: '#666', marginTop: '5px' }}>
+        <div style={nodeStyles.helpText}>
           Common headers: <code>Content-Type</code>, <code>Authorization</code>.
           Use <code>${'{variableName}'}</code> for API keys.
         </div>
       </div>
 
-      <div style={{ marginBottom: '10px' }}>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center'
-          }}
-        >
-          <label style={{ fontWeight: 'bold', marginBottom: '5px' }}>
-            {method === 'GET' ? 'Query Parameters:' : 'Request Body:'}
-          </label>
-        </div>
+      <div style={nodeStyles.fieldGroup}>
+        <label style={nodeStyles.label}>
+          {method === 'GET' ? 'Query Parameters:' : 'Request Body:'}
+        </label>
         <textarea
           value={payloadStr}
           onChange={handlePayloadChange}
           rows={5}
           style={{
-            width: '100%',
-            padding: '8px',
-            borderRadius: '4px',
-            border: payloadError ? '1px solid red' : '1px solid #ddd',
-            fontFamily: 'monospace',
-            boxSizing: 'border-box',
-            resize: 'none'
+            ...nodeStyles.textarea,
+            border: payloadError ? '1px solid red' : nodeStyles.textarea.border
           }}
           placeholder={
             method === 'GET'
@@ -470,7 +402,7 @@ function ApiCallNode ({ data, isConnectable, id }: NodeProps) {
             {payloadError}
           </div>
         )}
-        <div style={{ fontSize: '11px', color: '#666', marginTop: '5px' }}>
+        <div style={nodeStyles.helpText}>
           {method === 'GET' ? (
             <>
               These parameters will be converted to URL query parameters (
@@ -485,38 +417,22 @@ function ApiCallNode ({ data, isConnectable, id }: NodeProps) {
         </div>
       </div>
 
-      <div style={{ marginBottom: '10px' }}>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center'
-          }}
-        >
-          <label style={{ fontWeight: 'bold', marginBottom: '5px' }}>
-            Response Path (optional):
-          </label>
-        </div>
+      <div style={nodeStyles.fieldGroup}>
+        <label style={nodeStyles.label}>Response Path (optional):</label>
         <input
           type='text'
           value={responsePath}
           onChange={handleResponsePathChange}
-          style={{
-            width: '100%',
-            padding: '8px',
-            borderRadius: '4px',
-            border: '1px solid #ddd',
-            boxSizing: 'border-box'
-          }}
+          style={nodeStyles.input}
           placeholder='e.g. data.results.0.id'
         />
-        <div style={{ fontSize: '11px', color: '#666', marginTop: '5px' }}>
+        <div style={nodeStyles.helpText}>
           Common examples: <code>data.results</code>, <code>items.0.name</code>,{' '}
           <code>choices.0.message.content</code> (OpenAI)
         </div>
       </div>
 
-      <div style={{ marginBottom: '10px' }}>
+      <div style={nodeStyles.fieldGroup}>
         <label
           style={{
             display: 'flex',
@@ -535,60 +451,26 @@ function ApiCallNode ({ data, isConnectable, id }: NodeProps) {
       </div>
 
       {saveAsVariable && (
-        <div style={{ marginBottom: '10px' }}>
-          <label
-            style={{
-              display: 'block',
-              fontWeight: 'bold',
-              marginBottom: '5px'
-            }}
-          >
-            Variable Name:
-          </label>
+        <div style={nodeStyles.fieldGroup}>
+          <label style={nodeStyles.label}>Variable Name:</label>
           <input
             type='text'
             value={variableName}
             onChange={handleVariableNameChange}
-            style={{
-              width: '100%',
-              padding: '8px',
-              borderRadius: '4px',
-              border: '1px solid #ddd',
-              boxSizing: 'border-box'
-            }}
+            style={nodeStyles.input}
             placeholder='apiResponse'
           />
-          <div style={{ fontSize: '11px', color: '#666', marginTop: '5px' }}>
+          <div style={nodeStyles.helpText}>
             Access with: $&#123;{variableName}&#125;
           </div>
         </div>
       )}
 
-      {/* Multiple Output handles */}
-      {/* Bottom output handle */}
+      {/* Single Output handle */}
       <Handle
         type='source'
-        id='handle-bottom'
         position={Position.Bottom}
-        style={{ background: '#555' }}
-        isConnectable={isConnectable}
-      />
-
-      {/* Right output handle */}
-      <Handle
-        type='source'
-        id='handle-right'
-        position={Position.Right}
-        style={{ background: '#555' }}
-        isConnectable={isConnectable}
-      />
-
-      {/* Left output handle */}
-      <Handle
-        type='source'
-        id='handle-left'
-        position={Position.Left}
-        style={{ top: '70%', background: '#555' }}
+        style={{ ...nodeStyles.handle, ...nodeStyles.handleOutput }}
         isConnectable={isConnectable}
       />
     </div>

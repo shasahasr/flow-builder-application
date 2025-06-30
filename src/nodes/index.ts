@@ -12,7 +12,9 @@ import ApiCallNode from './ApiCallNode';
 import ConditionNode from './ConditionNode';
 import YesNoConditionNode from './YesNoConditionNode';
 
-export const initialNodes: AppNode[] = [];
+export const initialNodes: AppNode[] = [
+  // Initial nodes for the workflow
+];
 
 export const nodeTypes = {
   // Original node types (commented out but kept for reference)

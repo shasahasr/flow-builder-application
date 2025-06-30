@@ -1,5 +1,6 @@
 import { NodeProps, Handle, Position, useReactFlow } from '@xyflow/react'
 import { useState, useEffect } from 'react'
+import { getNodeContainerStyle, nodeStyles } from './nodeStyles'
 
 // Define the input parameter node data structure
 export type InputParameterNodeData = {
@@ -130,94 +131,64 @@ function InputParameterNode ({ data, isConnectable, id }: NodeProps) {
   }
 
   return (
-    <div
-      style={{
-        padding: '15px',
-        borderRadius: '5px',
-        border: '1px solid #ddd',
-        background: '#f0f7ff',
-        width: 320,
-        fontSize: '12px',
-        boxSizing: 'border-box'
-      }}
-    >
+    <div style={getNodeContainerStyle('input')}>
       {/* Input handle */}
       <Handle
         type='target'
         position={Position.Top}
-        style={{ background: '#555' }}
+        style={{ ...nodeStyles.handle, ...nodeStyles.handleInput }}
         isConnectable={isConnectable}
       />
 
-      <div style={{ marginBottom: '10px' }}>
-        <label
-          style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px' }}
-        >
-          Block Name:
-        </label>
+      <div style={nodeStyles.fieldGroup}>
+        <label style={nodeStyles.label}>Block Name:</label>
         <input
           type='text'
           value={name}
           onChange={handleNameChange}
-          style={{
-            width: '100%',
-            padding: '8px',
-            borderRadius: '4px',
-            border: '1px solid #ddd',
-            boxSizing: 'border-box'
-          }}
+          style={nodeStyles.input}
         />
       </div>
 
-      <div style={{ marginBottom: '10px' }}>
-        <label
-          style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px' }}
-        >
-          Question:
-        </label>
+      <div style={nodeStyles.fieldGroup}>
+        <label style={nodeStyles.label}>Question:</label>
         <textarea
           value={question}
           onChange={handleQuestionChange}
           rows={4}
-          style={{
-            width: '100%',
-            padding: '8px',
-            borderRadius: '4px',
-            border: '1px solid #ddd',
-            boxSizing: 'border-box',
-            resize: 'none'
-          }}
+          style={nodeStyles.textarea}
           placeholder='Enter question to ask user...'
         />
       </div>
 
-      <div>
-        <label
-          style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px' }}
-        >
-          Parameter Name:
-        </label>
+      <div style={nodeStyles.fieldGroup}>
+        <label style={nodeStyles.label}>Parameter Name:</label>
         <input
           type='text'
           value={parameterName}
           onChange={handleParameterNameChange}
-          style={{
-            width: '100%',
-            padding: '8px',
-            borderRadius: '4px',
-            border: '1px solid #ddd',
-            boxSizing: 'border-box'
-          }}
+          style={nodeStyles.input}
           placeholder='e.g. location, user_name, etc.'
         />
       </div>
 
-      <div style={{ marginTop: '10px', marginBottom: '10px' }}>
+      <div
+        style={{
+          marginTop: '12px',
+          marginBottom: '12px',
+          padding: '12px',
+          background: '#f8fafc',
+          borderRadius: '8px',
+          border: '1px solid #e2e8f0'
+        }}
+      >
         <label
           style={{
             display: 'flex',
             alignItems: 'center',
-            fontWeight: 'bold'
+            fontWeight: '500',
+            fontSize: '12px',
+            color: '#374151'
           }}
         >
           <input
@@ -231,60 +202,26 @@ function InputParameterNode ({ data, isConnectable, id }: NodeProps) {
       </div>
 
       {saveAsVariable && (
-        <div style={{ marginBottom: '10px' }}>
-          <label
-            style={{
-              display: 'block',
-              fontWeight: 'bold',
-              marginBottom: '5px'
-            }}
-          >
-            Custom Variable Name:
-          </label>
+        <div style={nodeStyles.fieldGroup}>
+          <label style={nodeStyles.label}>Custom Variable Name:</label>
           <input
             type='text'
             value={variableName}
             onChange={handleVariableNameChange}
-            style={{
-              width: '100%',
-              padding: '8px',
-              borderRadius: '4px',
-              border: '1px solid #ddd',
-              boxSizing: 'border-box'
-            }}
+            style={nodeStyles.input}
             placeholder={parameterName || 'customVarName'}
           />
-          <div style={{ fontSize: '11px', color: '#666', marginTop: '5px' }}>
+          <div style={nodeStyles.helpText}>
             Access with: $&#123;{variableName || parameterName}&#125;
           </div>
         </div>
       )}
 
-      {/* Multiple Output handles */}
-      {/* Bottom output handle */}
+      {/* Single Output handle */}
       <Handle
         type='source'
-        id='handle-bottom'
         position={Position.Bottom}
-        style={{ background: '#555' }}
-        isConnectable={isConnectable}
-      />
-
-      {/* Right output handle */}
-      <Handle
-        type='source'
-        id='handle-right'
-        position={Position.Right}
-        style={{ background: '#555' }}
-        isConnectable={isConnectable}
-      />
-
-      {/* Left output handle */}
-      <Handle
-        type='source'
-        id='handle-left'
-        position={Position.Left}
-        style={{ top: '70%', background: '#555' }}
+        style={{ ...nodeStyles.handle, ...nodeStyles.handleOutput }}
         isConnectable={isConnectable}
       />
     </div>

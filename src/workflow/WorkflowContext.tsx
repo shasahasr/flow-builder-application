@@ -290,10 +290,9 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
           if (saveAsVariable && variableName && variableName !== paramName) {
             nextContextData[variableName] = userInput
 
-            // Add a notification that the variable was saved
-            addOutputMessage(
-              `Input saved as variable: ${variableName} = "${userInput}"`,
-              'assistant'
+            // Don't show variable saving notifications to keep chat clean
+            console.log(
+              `Input saved as variable: ${variableName} = "${userInput}"`
             )
           }
           break
@@ -310,8 +309,6 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
             let resultMessage = 'API call result: ${result}'
             let saveAsVariable = false
             let variableName = 'apiResponse'
-            let selectedFunction = ''
-            let apiType = ''
 
             if (node.data && typeof node.data === 'object') {
               if ('url' in node.data) url = node.data.url as string
@@ -326,9 +323,6 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
                 saveAsVariable = node.data.saveAsVariable as boolean
               if ('variableName' in node.data)
                 variableName = node.data.variableName as string
-              if ('apiType' in node.data) apiType = node.data.apiType as string
-              if ('selectedFunction' in node.data)
-                selectedFunction = node.data.selectedFunction as string
             }
 
             // Process any variables in all fetch parameters
@@ -338,13 +332,7 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
             payload = processMessage(payload, contextData)
             resultMessage = processMessage(resultMessage, contextData)
 
-            // Include selected function in the message if available
-            const functionDetail = selectedFunction
-              ? ` (function: ${selectedFunction})`
-              : ''
-
-            // Skip the API call message in the chat output, log to console only
-            console.log(`Making API call to ${url}${functionDetail}...`)
+            console.log(`Making API call to ${url}...`)
 
             // Parse the payload
             let payloadObj = {}
@@ -361,9 +349,6 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
             // Make a real API call
             let responseData
             try {
-              // Import OpenAI API key from environment
-              const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY
-
               // Parse headers from JSON
               let parsedHeaders: Record<string, string> = {
                 'Content-Type': 'application/json'
@@ -381,62 +366,13 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
                 // Continue with default headers
               }
 
-              // Process API key variables in headers
-              if (
-                apiType === 'chatgpt' &&
-                !('Authorization' in parsedHeaders)
-              ) {
-                if (!OPENAI_API_KEY) {
-                  throw new Error(
-                    'OpenAI API key not found in environment variables. Please set VITE_OPENAI_API_KEY in your .env file.'
-                  )
-                }
-                parsedHeaders.Authorization = `Bearer ${OPENAI_API_KEY}`
-              }
-
-              // Replace any variables in headers
-              Object.keys(parsedHeaders).forEach(key => {
-                const value = parsedHeaders[key]
-                if (typeof value === 'string' && value.includes('${')) {
-                  // Replace ${VARIABLE_NAME} with actual values
-                  parsedHeaders[key] = value.replace(
-                    /\${([^}]+)}/g,
-                    (match, varName) => {
-                      if (varName === 'OPENAI_API_KEY' && OPENAI_API_KEY) {
-                        return OPENAI_API_KEY
-                      }
-                      return match // Keep as is if not found
-                    }
-                  )
-                }
-              })
-
               // Create request options with appropriate HTTP method from node data
               const requestOptions: RequestInit = {
                 method: method,
                 headers: parsedHeaders
               }
 
-              // Special handling for OpenAI models
-              if (apiType === 'chatgpt') {
-                // Update model in payload to a more widely available one if it's gpt-4o
-                if (
-                  payloadObj &&
-                  typeof payloadObj === 'object' &&
-                  'model' in payloadObj
-                ) {
-                  const model = payloadObj.model as string
-                  if (model === 'gpt-4o') {
-                    console.log(
-                      'Replacing gpt-4o with gpt-3.5-turbo for better compatibility'
-                    )
-                    ;(payloadObj as Record<string, unknown>).model =
-                      'gpt-3.5-turbo'
-                  }
-                }
-              }
-
-              // Handle payload based on HTTP method and API type
+              // Handle payload based on HTTP method
               if (
                 method === 'GET' ||
                 method === 'HEAD' ||
@@ -444,75 +380,6 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
               ) {
                 // For GET, HEAD, DELETE: convert payload to URL query parameters
                 if (Object.keys(payloadObj).length > 0) {
-                  // Special handling for OpenMeteo's location parameter
-                  if (apiType === 'openmeteo' && 'location' in payloadObj) {
-                    try {
-                      // Convert location name to coordinates
-                      const locationName = String(payloadObj.location)
-                      console.log(
-                        `Converting location "${locationName}" to coordinates...`
-                      )
-
-                      // Use the Open-Meteo Geocoding API
-                      const geocodingUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
-                        locationName
-                      )}&count=1`
-
-                      const geocodeResponse = await fetch(geocodingUrl)
-
-                      if (geocodeResponse.ok) {
-                        const geocodeData = await geocodeResponse.json()
-
-                        if (
-                          geocodeData.results &&
-                          geocodeData.results.length > 0
-                        ) {
-                          const { latitude, longitude } = geocodeData.results[0]
-                          console.log(
-                            `Found coordinates: lat=${latitude}, lon=${longitude} for "${locationName}"`
-                          )
-
-                          // Replace location with lat/lon
-                          delete (payloadObj as Record<string, unknown>)
-                            .location
-                          ;(payloadObj as Record<string, unknown>).latitude =
-                            latitude
-                          ;(payloadObj as Record<string, unknown>).longitude =
-                            longitude
-                        } else {
-                          console.error(
-                            `No coordinates found for location "${locationName}"`
-                          )
-                          // Use defaults
-                          ;(
-                            payloadObj as Record<string, unknown>
-                          ).latitude = 40.7128 // New York
-                          ;(payloadObj as Record<string, unknown>).longitude =
-                            -74.006
-                        }
-                      } else {
-                        console.error(
-                          `Geocoding API error: ${geocodeResponse.statusText}`
-                        )
-                        // Use defaults
-                        ;(
-                          payloadObj as Record<string, unknown>
-                        ).latitude = 40.7128
-                        ;(payloadObj as Record<string, unknown>).longitude =
-                          -74.006
-                      }
-                    } catch (geoError) {
-                      console.error(`Error during geocoding: ${geoError}`)
-                      // Use defaults
-                      ;(
-                        payloadObj as Record<string, unknown>
-                      ).latitude = 40.7128
-                      ;(payloadObj as Record<string, unknown>).longitude =
-                        -74.006
-                    }
-                  }
-
-                  // Convert payload to URL parameters for GET requests
                   const urlParams = new URLSearchParams()
                   Object.entries(payloadObj).forEach(([key, value]) => {
                     urlParams.append(key, String(value))
@@ -538,67 +405,10 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
                 }
               }
 
-              // We'll skip the API call message to make the flow more seamless
-              // Only log to console for debugging
-              console.log(`Making API call to ${url} (${apiType})...`)
+              console.log(`Making API call to ${url}...`)
 
-              // Make the fetch call with CORS handling
-              let response
-              try {
-                response = await fetch(url, requestOptions)
-              } catch (corsError) {
-                console.error('CORS error, trying proxy:', corsError)
-
-                // Try multiple CORS-friendly proxies for Open-Meteo (GET) requests only
-                if (apiType === 'openmeteo') {
-                  const corsProxies = [
-                    `https://cors-anywhere.herokuapp.com/${url}`,
-                    `https://api.allorigins.win/raw?url=${encodeURIComponent(
-                      url
-                    )}`,
-                    `https://cors-proxy.htmldriven.com/?url=${encodeURIComponent(
-                      url
-                    )}`
-                  ]
-
-                  for (const proxyUrl of corsProxies) {
-                    try {
-                      console.log(
-                        `API call with direct URL failed. Trying CORS proxy...`
-                      )
-
-                      const proxyOptions = { ...requestOptions }
-                      if (proxyOptions.headers) {
-                        // Add the required header for some CORS proxies
-                        proxyOptions.headers = {
-                          ...proxyOptions.headers,
-                          'X-Requested-With': 'XMLHttpRequest'
-                        }
-                      }
-
-                      response = await fetch(proxyUrl, proxyOptions)
-                      if (response.ok) {
-                        console.log(`Successfully connected using CORS proxy`)
-                        break
-                      }
-                    } catch (err) {
-                      console.error(`Proxy attempt failed: ${err}`)
-                    }
-                  }
-                } else {
-                  // For ChatGPT API, we can't easily use CORS proxies
-                  throw new Error(
-                    `CORS error for ${apiType} API request. Consider enabling CORS on the API or using a server-side proxy.`
-                  )
-                }
-
-                // If all proxies failed
-                if (!response || !response.ok) {
-                  throw new Error(
-                    `Failed to make API call through direct URL and proxies`
-                  )
-                }
-              }
+              // Make the fetch call
+              const response = await fetch(url, requestOptions)
 
               // Check if response is ok
               if (!response.ok) {
@@ -610,80 +420,14 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
               // Parse the response
               responseData = await response.json()
 
-              // Log successful response to console only
               console.log(
                 `Received response from API. Status: ${response.status}`
               )
             } catch (error) {
-              // If the API call fails, log to console and create a fallback response
-              console.error(`API call failed: ${error}. Using fallback data.`)
-
-              // Add a user-friendly error message - make it simple and non-technical
-              addOutputMessage(
-                `I'll show you some example information instead:`,
-                'assistant'
-              )
-
-              // Fall back to mock data if the real API call fails
-              if (selectedFunction) {
-                // Create mock response based on the selected function
-                switch (selectedFunction) {
-                  case 'getUserData':
-                    responseData = {
-                      success: true,
-                      data: {
-                        id: 'user123',
-                        name: 'Alex Johnson',
-                        email: 'alex@example.com',
-                        preferences: {
-                          theme: 'dark',
-                          notifications: true
-                        }
-                      }
-                    }
-                    break
-                  case 'getWeatherForecast':
-                    responseData = {
-                      success: true,
-                      data: {
-                        location: 'New York',
-                        current: {
-                          temperature: 72,
-                          conditions: 'partly cloudy',
-                          humidity: 45
-                        },
-                        forecast: [
-                          {
-                            day: 'Monday',
-                            high: 75,
-                            low: 62,
-                            conditions: 'sunny'
-                          },
-                          {
-                            day: 'Tuesday',
-                            high: 70,
-                            low: 60,
-                            conditions: 'rain'
-                          }
-                        ]
-                      }
-                    }
-                    break
-                  default:
-                    responseData = {
-                      success: false,
-                      error: `API call failed: ${error}`,
-                      timestamp: new Date().toISOString()
-                    }
-                }
-              } else {
-                // Generic fallback response
-                responseData = {
-                  success: false,
-                  error: `API call failed: ${error}`,
-                  timestamp: new Date().toISOString()
-                }
-              }
+              // If the API call fails, just show a failure message
+              console.error(`API call failed: ${error}`)
+              addOutputMessage(`API call failed: ${error}`, 'assistant')
+              break
             }
 
             // Store the full response in the context
@@ -692,8 +436,6 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
             // If saveAsVariable is true, store with the specified variable name
             if (saveAsVariable && variableName) {
               nextContextData[variableName] = responseData
-
-              // Log to console only
               console.log(`API response saved as variable: ${variableName}`)
             }
 
@@ -717,150 +459,16 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
 
             // If saveAsVariable is true, also store the extracted result
             if (saveAsVariable && variableName) {
-              // Store the actual result in a result property
               nextContextData[`${variableName}_result`] = result
             }
 
-            // Format the result message based on the API type
-            let finalResultMessage = ''
-
-            // For ChatGPT text responses, just output the content directly
-            if (apiType === 'chatgpt' && selectedFunction === 'Generate Text') {
-              finalResultMessage = (result as string) || 'No response received'
-            }
-            // For ChatGPT image responses, provide a link
-            else if (
-              apiType === 'chatgpt' &&
-              selectedFunction === 'Generate Image'
-            ) {
-              const imageUrl = result as string
-              finalResultMessage = imageUrl
-                ? `Here's your generated image: ${imageUrl}`
-                : 'Image generation failed'
-            }
-            // For OpenMeteo, format the weather data in a user-friendly way
-            else if (apiType === 'openmeteo') {
-              if (typeof result === 'object' && result !== null) {
-                // Format weather data in a conversational way
-                if (selectedFunction === 'Current Weather') {
-                  try {
-                    const weather = result as Record<string, unknown>
-                    const temperature =
-                      (weather.temperature as number) ||
-                      (weather.temperature_2m as number)
-                    const weatherCode = weather.weathercode as number
-                    const windSpeed =
-                      (weather.windspeed as number) ||
-                      (weather.wind_speed as number)
-
-                    let weatherCondition = 'clear'
-                    if (weatherCode >= 1 && weatherCode <= 3)
-                      weatherCondition = 'partly cloudy'
-                    else if (weatherCode >= 45 && weatherCode <= 48)
-                      weatherCondition = 'foggy'
-                    else if (weatherCode >= 51 && weatherCode <= 67)
-                      weatherCondition = 'rainy'
-                    else if (weatherCode >= 71 && weatherCode <= 77)
-                      weatherCondition = 'snowy'
-                    else if (weatherCode >= 80 && weatherCode <= 99)
-                      weatherCondition = 'stormy'
-
-                    finalResultMessage = `The current weather is ${weatherCondition}`
-                    if (temperature !== undefined)
-                      finalResultMessage += ` with a temperature of ${temperature}°C`
-                    if (windSpeed !== undefined)
-                      finalResultMessage += ` and wind speed of ${windSpeed} km/h`
-                    finalResultMessage += '.'
-                  } catch (e) {
-                    // Fall back to JSON if we can't parse the specific format
-                    finalResultMessage = `Here's the current weather: ${JSON.stringify(
-                      result
-                    )}`
-                  }
-                } else if (selectedFunction === 'Weather Forecast') {
-                  // Define type for weather forecast outside try block
-                  interface WeatherForecast {
-                    daily?: {
-                      weathercode?: number[]
-                      time?: string[]
-                      temperature_2m_max?: number[]
-                      temperature_2m_min?: number[]
-                      [key: string]: unknown
-                    }
-                    [key: string]: unknown
-                  }
-
-                  try {
-                    const weather = result as WeatherForecast
-                    if (weather.daily) {
-                      finalResultMessage = `Weather forecast: `
-                      if (weather.daily.weathercode && weather.daily.time) {
-                        const days = [
-                          'Today',
-                          'Tomorrow',
-                          'In 2 days',
-                          'In 3 days',
-                          'In 4 days'
-                        ]
-                        for (
-                          let i = 0;
-                          i < Math.min(3, weather.daily.time.length);
-                          i++
-                        ) {
-                          const code = weather.daily.weathercode[i]
-                          let condition = 'clear'
-                          if (code >= 1 && code <= 3)
-                            condition = 'partly cloudy'
-                          else if (code >= 45 && code <= 48) condition = 'foggy'
-                          else if (code >= 51 && code <= 67) condition = 'rainy'
-                          else if (code >= 71 && code <= 77) condition = 'snowy'
-                          else if (code >= 80 && code <= 99)
-                            condition = 'stormy'
-
-                          finalResultMessage += `${days[i]}: ${condition}`
-
-                          if (
-                            weather.daily.temperature_2m_max &&
-                            weather.daily.temperature_2m_min
-                          ) {
-                            finalResultMessage += ` (${weather.daily.temperature_2m_min[i]}°C to ${weather.daily.temperature_2m_max[i]}°C)`
-                          }
-
-                          if (i < 2) finalResultMessage += ', '
-                        }
-                      } else {
-                        // Safely stringify the daily object
-                        finalResultMessage += JSON.stringify(weather.daily)
-                      }
-                    } else {
-                      finalResultMessage = `Forecast data: ${JSON.stringify(
-                        result
-                      )}`
-                    }
-                  } catch (e) {
-                    finalResultMessage = `Here's the weather forecast: ${JSON.stringify(
-                      result
-                    )}`
-                  }
-                } else {
-                  // For other types of weather data
-                  finalResultMessage = `${selectedFunction} data: ${JSON.stringify(
-                    result,
-                    null,
-                    2
-                  )}`
-                }
-              } else {
-                finalResultMessage = `${selectedFunction} results: ${result}`
-              }
-            }
-            // Default case: use the raw result or a custom message
-            else {
-              finalResultMessage = WorkflowUtils.evaluateExpression(
-                resultMessage,
-                { ...contextData, result }
-              )
-            }
+            // Use the custom result message or show the raw result
+            const finalResultMessage = resultMessage
+              ? WorkflowUtils.evaluateExpression(resultMessage, {
+                  ...contextData,
+                  result
+                })
+              : `API result: ${JSON.stringify(result, null, 2)}`
 
             // Add the result message to the output
             addOutputMessage(finalResultMessage, 'assistant')
@@ -868,11 +476,8 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
             // Log error to console only, not to chat output
             console.error(`API call failed: ${error}`)
 
-            // Add a user-friendly message instead
-            addOutputMessage(
-              "I couldn't complete this request. Let's try something else.",
-              'assistant'
-            )
+            // Add a simple failure message
+            addOutputMessage(`API call failed: ${error}`, 'assistant')
           }
           break
         }
@@ -946,8 +551,8 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
           }
 
           try {
-            // First check for common comparison patterns
-            const comparison = conditionText.match(/(.*?)(==|!=|>|<|>=|<=)(.*)/)
+            // First check for common comparison patterns - match longer operators first
+            const comparison = conditionText.match(/(.*?)(>=|<=|==|!=|>|<)(.*)/)
 
             if (comparison) {
               // We have a structured comparison

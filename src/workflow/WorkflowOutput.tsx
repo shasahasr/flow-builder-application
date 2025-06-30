@@ -29,45 +29,68 @@ const WorkflowOutput: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
       {/* Header */}
       <div
         style={{
-          padding: '10px 15px',
-          background: '#ffffff',
-          borderBottom: '1px solid #ddd',
+          padding: '16px 20px',
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          borderBottom: '1px solid #e5e5e5',
           display: 'flex',
           justifyContent: 'space-between',
-          alignItems: 'center'
+          alignItems: 'center',
+          color: '#ffffff'
         }}
       >
-        <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold' }}>
-          AI Agent Preview
-        </h2>
+        <div>
+          <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>
+            🤖 AI Agent Preview
+          </h2>
+          <p style={{ margin: '2px 0 0 0', fontSize: '12px', opacity: 0.9 }}>
+            Test your workflow conversation
+          </p>
+        </div>
         <div style={{ display: 'flex', gap: '8px' }}>
           <button
             onClick={clearOutput}
             style={{
-              padding: '6px 12px',
-              background: '#e0e0e0',
-              border: 'none',
-              borderRadius: '4px',
+              padding: '8px 14px',
+              background: 'rgba(255, 255, 255, 0.2)',
+              color: '#ffffff',
+              border: '1px solid rgba(255, 255, 255, 0.3)',
+              borderRadius: '6px',
               cursor: 'pointer',
-              fontSize: '14px'
+              fontSize: '13px',
+              fontWeight: '500',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.3)'
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)'
             }}
           >
-            Clear Chat
+            🗑️ Clear
           </button>
           {onClose && (
             <button
               onClick={onClose}
               style={{
-                padding: '6px 12px',
-                background: '#ff4757',
+                padding: '8px 14px',
+                background: 'rgba(255, 75, 87, 0.9)',
                 color: '#ffffff',
                 border: 'none',
-                borderRadius: '4px',
+                borderRadius: '6px',
                 cursor: 'pointer',
-                fontSize: '14px'
+                fontSize: '13px',
+                fontWeight: '500',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = '#ff4757'
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = 'rgba(255, 75, 87, 0.9)'
               }}
             >
-              ✕
+              ✕ Close
             </button>
           )}
         </div>
@@ -76,36 +99,84 @@ const WorkflowOutput: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
       {/* Chat Messages */}
       <div
         style={{
-          flex: '1 1 0%', // Use flex shorthand for better cross-browser support
+          flex: '1 1 0%',
           overflowY: 'auto',
-          overflowX: 'hidden', // Prevent horizontal scroll
-          padding: '10px',
+          overflowX: 'hidden',
+          padding: '15px',
           display: 'flex',
           flexDirection: 'column',
-          gap: '10px',
-          minHeight: 0 // Allow shrinking below content size
+          gap: '12px',
+          minHeight: 0
         }}
       >
         {workflowOutput.length > 0 ? (
-          workflowOutput.map((message, index) => (
-            <div
-              key={index}
-              style={{
-                alignSelf: index % 2 === 0 ? 'flex-end' : 'flex-start',
-                maxWidth: '80%',
-                padding: '10px',
-                borderRadius: '10px',
-                background: index % 2 === 0 ? '#1a73e8' : '#ffffff',
-                color: index % 2 === 0 ? '#ffffff' : '#333',
-                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
-              }}
-            >
-              {message}
-            </div>
-          ))
+          workflowOutput.map((messageStr, index) => {
+            // Parse the JSON message
+            let parsedMessage
+            try {
+              parsedMessage = JSON.parse(messageStr)
+            } catch {
+              // If it's not JSON, treat it as a plain string (assistant message)
+              parsedMessage = {
+                role: 'assistant',
+                content: messageStr,
+                timestamp: new Date().toISOString()
+              }
+            }
+
+            const isUser = parsedMessage.role === 'user'
+
+            return (
+              <div
+                key={index}
+                style={{
+                  alignSelf: isUser ? 'flex-end' : 'flex-start',
+                  maxWidth: '85%',
+                  padding: '12px 16px',
+                  borderRadius: isUser
+                    ? '18px 18px 4px 18px'
+                    : '18px 18px 18px 4px',
+                  background: isUser ? '#007aff' : '#f1f1f1',
+                  color: isUser ? '#ffffff' : '#000000',
+                  boxShadow: '0 1px 2px rgba(0, 0, 0, 0.1)',
+                  wordWrap: 'break-word',
+                  fontSize: '14px',
+                  lineHeight: '1.4'
+                }}
+              >
+                <div>{parsedMessage.content}</div>
+                {parsedMessage.timestamp && (
+                  <div
+                    style={{
+                      fontSize: '11px',
+                      opacity: 0.7,
+                      marginTop: '4px',
+                      textAlign: isUser ? 'right' : 'left'
+                    }}
+                  >
+                    {new Date(parsedMessage.timestamp).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          })
         ) : (
-          <div style={{ textAlign: 'center', color: '#666' }}>
-            No messages yet. Run your workflow to see the conversation here.
+          <div
+            style={{
+              textAlign: 'center',
+              color: '#888',
+              padding: '40px 20px',
+              fontSize: '16px'
+            }}
+          >
+            💬 No messages yet
+            <br />
+            <span style={{ fontSize: '14px', opacity: 0.8 }}>
+              Run your workflow to see the conversation here
+            </span>
           </div>
         )}
       </div>
@@ -114,12 +185,13 @@ const WorkflowOutput: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
       <form
         onSubmit={handleSendMessage}
         style={{
-          padding: '10px',
+          padding: '15px',
           background: '#ffffff',
-          borderTop: '1px solid #ddd',
+          borderTop: '1px solid #e5e5e5',
           display: 'flex',
-          gap: '10px',
-          flexShrink: 0 // Prevent input from shrinking
+          gap: '12px',
+          flexShrink: 0,
+          alignItems: 'flex-end'
         }}
       >
         <input
@@ -128,26 +200,40 @@ const WorkflowOutput: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
           onChange={e => setUserInput(e.target.value)}
           placeholder='Type a message...'
           style={{
-            flex: '1 1 0%', // Use flex instead of flexGrow for better control
-            padding: '10px',
-            borderRadius: '20px',
-            border: '1px solid #ddd',
+            flex: '1 1 0%',
+            padding: '12px 16px',
+            borderRadius: '24px',
+            border: '1px solid #d1d1d1',
             outline: 'none',
             fontSize: '14px',
-            minWidth: 0 // Allow input to shrink below default size
+            minWidth: 0,
+            fontFamily: 'inherit',
+            backgroundColor: '#f8f8f8',
+            transition: 'all 0.2s ease'
+          }}
+          onFocus={e => {
+            e.target.style.backgroundColor = '#ffffff'
+            e.target.style.borderColor = '#007aff'
+          }}
+          onBlur={e => {
+            e.target.style.backgroundColor = '#f8f8f8'
+            e.target.style.borderColor = '#d1d1d1'
           }}
         />
         <button
           type='submit'
+          disabled={!userInput.trim()}
           style={{
-            padding: '10px 15px',
-            background: '#1a73e8',
+            padding: '12px 20px',
+            background: userInput.trim() ? '#007aff' : '#cccccc',
             color: '#ffffff',
             border: 'none',
-            borderRadius: '20px',
-            cursor: 'pointer',
+            borderRadius: '24px',
+            cursor: userInput.trim() ? 'pointer' : 'not-allowed',
             fontSize: '14px',
-            flexShrink: 0 // Prevent button from shrinking
+            flexShrink: 0,
+            fontWeight: '600',
+            transition: 'all 0.2s ease'
           }}
         >
           Send

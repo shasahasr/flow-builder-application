@@ -1,5 +1,6 @@
 import { Handle, Position, type NodeProps, useReactFlow } from '@xyflow/react'
 import { useState, useEffect } from 'react'
+import { getNodeContainerStyle, nodeStyles } from './nodeStyles'
 
 // Define the data type for this node
 export type DisplayMessageNodeData = {
@@ -59,95 +60,45 @@ function DisplayMessageNode ({ data, isConnectable, id }: NodeProps) {
   }
 
   return (
-    <div
-      style={{
-        padding: '15px',
-        borderRadius: '5px',
-        border: '1px solid #ddd',
-        background: '#f8f8f8',
-        width: 320,
-        fontSize: '12px',
-        boxSizing: 'border-box'
-      }}
-    >
+    <div style={getNodeContainerStyle('message')}>
       {/* Input handle */}
       <Handle
         type='target'
         position={Position.Top}
-        style={{ background: '#555' }}
+        style={{ ...nodeStyles.handle, ...nodeStyles.handleInput }}
         isConnectable={isConnectable}
       />
 
-      <div style={{ marginBottom: '10px' }}>
-        <label
-          style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px' }}
-        >
-          Block Name:
-        </label>
+      <div style={nodeStyles.fieldGroup}>
+        <label style={nodeStyles.label}>Block Name:</label>
         <input
           type='text'
           value={name}
           onChange={handleNameChange}
-          style={{
-            width: '100%',
-            padding: '8px',
-            borderRadius: '4px',
-            border: '1px solid #ddd',
-            boxSizing: 'border-box'
-          }}
+          style={nodeStyles.input}
         />
       </div>
 
-      <div>
-        <label
-          style={{ display: 'block', fontWeight: 'bold', marginBottom: '5px' }}
-        >
-          Message:
-        </label>
+      <div style={nodeStyles.fieldGroup}>
+        <label style={nodeStyles.label}>Message:</label>
         <textarea
           value={message}
           onChange={handleMessageChange}
           rows={4}
-          style={{
-            width: '100%',
-            padding: '8px',
-            borderRadius: '4px',
-            border: '1px solid #ddd',
-            boxSizing: 'border-box',
-            resize: 'none'
-          }}
+          style={nodeStyles.textarea}
           placeholder='Enter message to display to user...'
         />
-        <div style={{ fontSize: '11px', color: '#666', marginTop: '5px' }}>
-          Use ${'variableName'} to include variables. Example: Hello ${'name'}!
+        <div style={nodeStyles.helpText}>
+          Use ${'${variableName}'} to include variables. Example: Hello $
+          {'${name}'}!
         </div>
       </div>
 
-      {/* Multiple Output handles */}
-      {/* Bottom output handle */}
+      {/* Single Output handle */}
       <Handle
         type='source'
-        id='handle-bottom'
         position={Position.Bottom}
-        style={{ background: '#555' }}
-        isConnectable={isConnectable}
-      />
-
-      {/* Right output handle */}
-      <Handle
-        type='source'
-        id='handle-right'
-        position={Position.Right}
-        style={{ background: '#555' }}
-        isConnectable={isConnectable}
-      />
-
-      {/* Left output handle */}
-      <Handle
-        type='source'
-        id='handle-left'
-        position={Position.Left}
-        style={{ top: '70%', background: '#555' }}
+        style={{ ...nodeStyles.handle, ...nodeStyles.handleOutput }}
         isConnectable={isConnectable}
       />
     </div>
