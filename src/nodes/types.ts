@@ -7,7 +7,7 @@ import type { ApiCallNodeData } from './ApiCallNode'
 import type { ConditionNodeData } from './ConditionNode'
 import type { YesNoConditionNodeData } from './YesNoConditionNode'
 
-export type PositionLoggerNode = Node<{ label: string }, 'position-logger'>
+export type PositionLoggerNode = Node<{ label?: string }, 'position-logger'>
 
 // Define a type for the city input node data
 export type CityInputNodeData = {

@@ -71,21 +71,16 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
   const [isExecuting, setIsExecuting] = useState(false)
   const [waitingForUserInput, setWaitingForUserInput] = useState(false)
   const [savedWorkflows, setSavedWorkflows] = useState<string[]>([])
-  const [loadingSavedWorkflows, setLoadingSavedWorkflows] = useState(false)
 
   // Load saved workflows when user changes
   useEffect(() => {
     const fetchSavedWorkflows = async () => {
-      setLoadingSavedWorkflows(true)
-
       try {
         // Always load from localStorage in this simplified version
         loadFromLocalStorage()
       } catch (error) {
         console.error('Error in fetchSavedWorkflows:', error)
         setSavedWorkflows([])
-      } finally {
-        setLoadingSavedWorkflows(false)
       }
     }
 
@@ -224,7 +219,7 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // Function to wait for user input (will be connected to the chat UI)
   const waitForUserInput = useCallback(
-    (question: string, _paramName: string): Promise<string> => {
+    (question: string): Promise<string> => {
       // Add the question to the output as an assistant message
       addOutputMessage(question, 'assistant')
 
@@ -286,7 +281,7 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
           }
 
           // Wait for user input
-          const userInput = await waitForUserInput(question, paramName)
+          const userInput = await waitForUserInput(question)
 
           // Store the user's input in the context
           nextContextData[paramName] = userInput
@@ -306,8 +301,10 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
 
         case 'api_call': {
           try {
-            // Get API details from node data
+            // Get API details from node data - now directly mapping to fetch parameters
             let url = 'unspecified endpoint'
+            let method = 'GET'
+            let headers = '{}'
             let payload = '{}'
             let responsePath = ''
             let resultMessage = 'API call result: ${result}'
@@ -318,6 +315,8 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
 
             if (node.data && typeof node.data === 'object') {
               if ('url' in node.data) url = node.data.url as string
+              if ('method' in node.data) method = node.data.method as string
+              if ('headers' in node.data) headers = node.data.headers as string
               if ('payload' in node.data) payload = node.data.payload as string
               if ('responsePath' in node.data)
                 responsePath = node.data.responsePath as string
@@ -332,8 +331,10 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
                 selectedFunction = node.data.selectedFunction as string
             }
 
-            // Process any variables in the URL, payload and other fields
+            // Process any variables in all fetch parameters
             url = processMessage(url, contextData)
+            method = processMessage(method, contextData)
+            headers = processMessage(headers, contextData)
             payload = processMessage(payload, contextData)
             resultMessage = processMessage(resultMessage, contextData)
 
@@ -363,33 +364,61 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
               // Import OpenAI API key from environment
               const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY
 
-              // Create request options with appropriate HTTP method
-              const requestOptions: RequestInit = {
-                method: apiType === 'openmeteo' ? 'GET' : 'POST',
-                headers: {
-                  'Content-Type': 'application/json'
-                }
+              // Parse headers from JSON
+              let parsedHeaders: Record<string, string> = {
+                'Content-Type': 'application/json'
               }
 
-              // Add API key for ChatGPT API calls
-              if (apiType === 'chatgpt') {
+              try {
+                if (headers && headers.trim() !== '') {
+                  parsedHeaders = {
+                    ...parsedHeaders,
+                    ...JSON.parse(headers)
+                  }
+                }
+              } catch (error) {
+                console.error(`Error parsing headers JSON: ${error}`)
+                // Continue with default headers
+              }
+
+              // Process API key variables in headers
+              if (
+                apiType === 'chatgpt' &&
+                !('Authorization' in parsedHeaders)
+              ) {
                 if (!OPENAI_API_KEY) {
                   throw new Error(
                     'OpenAI API key not found in environment variables. Please set VITE_OPENAI_API_KEY in your .env file.'
                   )
                 }
+                parsedHeaders.Authorization = `Bearer ${OPENAI_API_KEY}`
+              }
 
-                // Check if we're using a project-based API key (starts with 'sk-proj-')
-                const isProjectKey = OPENAI_API_KEY.startsWith('sk-proj-')
-                if (isProjectKey) {
-                  console.log('Using project-based OpenAI API key format')
+              // Replace any variables in headers
+              Object.keys(parsedHeaders).forEach(key => {
+                const value = parsedHeaders[key]
+                if (typeof value === 'string' && value.includes('${')) {
+                  // Replace ${VARIABLE_NAME} with actual values
+                  parsedHeaders[key] = value.replace(
+                    /\${([^}]+)}/g,
+                    (match, varName) => {
+                      if (varName === 'OPENAI_API_KEY' && OPENAI_API_KEY) {
+                        return OPENAI_API_KEY
+                      }
+                      return match // Keep as is if not found
+                    }
+                  )
                 }
+              })
 
-                requestOptions.headers = {
-                  ...requestOptions.headers,
-                  Authorization: `Bearer ${OPENAI_API_KEY}`
-                }
+              // Create request options with appropriate HTTP method from node data
+              const requestOptions: RequestInit = {
+                method: method,
+                headers: parsedHeaders
+              }
 
+              // Special handling for OpenAI models
+              if (apiType === 'chatgpt') {
                 // Update model in payload to a more widely available one if it's gpt-4o
                 if (
                   payloadObj &&
@@ -407,90 +436,106 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
                 }
               }
 
-              // Handle payload differently based on API type
-              if (apiType === 'chatgpt' && Object.keys(payloadObj).length > 0) {
-                // For ChatGPT, include payload in request body
-                requestOptions.body = JSON.stringify(payloadObj)
-              } else if (
-                apiType === 'openmeteo' &&
-                Object.keys(payloadObj).length > 0
+              // Handle payload based on HTTP method and API type
+              if (
+                method === 'GET' ||
+                method === 'HEAD' ||
+                method === 'DELETE'
               ) {
-                // For Open-Meteo with a location parameter, convert to lat/lon first
-                if ('location' in payloadObj) {
-                  try {
-                    // Save the location name for later reference
-                    const locationName = String(payloadObj.location)
-                    console.log(
-                      `Converting location "${locationName}" to coordinates...`
-                    )
+                // For GET, HEAD, DELETE: convert payload to URL query parameters
+                if (Object.keys(payloadObj).length > 0) {
+                  // Special handling for OpenMeteo's location parameter
+                  if (apiType === 'openmeteo' && 'location' in payloadObj) {
+                    try {
+                      // Convert location name to coordinates
+                      const locationName = String(payloadObj.location)
+                      console.log(
+                        `Converting location "${locationName}" to coordinates...`
+                      )
 
-                    // Use the Open-Meteo Geocoding API to convert the location name to coordinates
-                    const geocodingUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
-                      locationName
-                    )}&count=1`
+                      // Use the Open-Meteo Geocoding API
+                      const geocodingUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
+                        locationName
+                      )}&count=1`
 
-                    // Make the geocoding request first
-                    const geocodeResponse = await fetch(geocodingUrl)
+                      const geocodeResponse = await fetch(geocodingUrl)
 
-                    if (geocodeResponse.ok) {
-                      const geocodeData = await geocodeResponse.json()
+                      if (geocodeResponse.ok) {
+                        const geocodeData = await geocodeResponse.json()
 
-                      // Check if we got valid results
-                      if (
-                        geocodeData.results &&
-                        geocodeData.results.length > 0
-                      ) {
-                        const { latitude, longitude } = geocodeData.results[0]
-                        console.log(
-                          `Found coordinates: lat=${latitude}, lon=${longitude} for "${locationName}"`
-                        )
+                        if (
+                          geocodeData.results &&
+                          geocodeData.results.length > 0
+                        ) {
+                          const { latitude, longitude } = geocodeData.results[0]
+                          console.log(
+                            `Found coordinates: lat=${latitude}, lon=${longitude} for "${locationName}"`
+                          )
 
-                        // Replace location with latitude and longitude in the payload
-                        delete (payloadObj as Record<string, unknown>).location
-                        ;(payloadObj as Record<string, unknown>).latitude =
-                          latitude
-                        ;(payloadObj as Record<string, unknown>).longitude =
-                          longitude
+                          // Replace location with lat/lon
+                          delete (payloadObj as Record<string, unknown>)
+                            .location
+                          ;(payloadObj as Record<string, unknown>).latitude =
+                            latitude
+                          ;(payloadObj as Record<string, unknown>).longitude =
+                            longitude
+                        } else {
+                          console.error(
+                            `No coordinates found for location "${locationName}"`
+                          )
+                          // Use defaults
+                          ;(
+                            payloadObj as Record<string, unknown>
+                          ).latitude = 40.7128 // New York
+                          ;(payloadObj as Record<string, unknown>).longitude =
+                            -74.006
+                        }
                       } else {
                         console.error(
-                          `No coordinates found for location "${locationName}"`
+                          `Geocoding API error: ${geocodeResponse.statusText}`
                         )
-                        // Use some defaults since we couldn't find the place
+                        // Use defaults
                         ;(
                           payloadObj as Record<string, unknown>
-                        ).latitude = 40.7128 // New York
+                        ).latitude = 40.7128
                         ;(payloadObj as Record<string, unknown>).longitude =
                           -74.006
                       }
-                    } else {
-                      console.error(
-                        `Geocoding API error: ${geocodeResponse.statusText}`
-                      )
-                      // Use some defaults if geocoding fails
+                    } catch (geoError) {
+                      console.error(`Error during geocoding: ${geoError}`)
+                      // Use defaults
                       ;(
                         payloadObj as Record<string, unknown>
-                      ).latitude = 40.7128 // New York
+                      ).latitude = 40.7128
                       ;(payloadObj as Record<string, unknown>).longitude =
                         -74.006
                     }
-                  } catch (geoError) {
-                    console.error(`Error during geocoding: ${geoError}`)
-                    // Use some defaults if geocoding fails
-                    ;(payloadObj as Record<string, unknown>).latitude = 40.7128 // New York
-                    ;(payloadObj as Record<string, unknown>).longitude = -74.006
                   }
+
+                  // Convert payload to URL parameters for GET requests
+                  const urlParams = new URLSearchParams()
+                  Object.entries(payloadObj).forEach(([key, value]) => {
+                    urlParams.append(key, String(value))
+                  })
+
+                  // Append parameters to URL
+                  url = `${url}${
+                    url.includes('?') ? '&' : '?'
+                  }${urlParams.toString()}`
+                  console.log(`Using URL with query parameters: ${url}`)
                 }
-
-                // Now convert payload to URL parameters
-                const urlParams = new URLSearchParams()
-                Object.entries(payloadObj).forEach(([key, value]) => {
-                  urlParams.append(key, String(value))
-                })
-
-                // Append parameters to URL
-                url = `${url}?${urlParams.toString()}`
-                // Log only to console for debugging
-                console.log(`Using URL with parameters: ${url}`)
+              } else {
+                // For POST, PUT, PATCH: include payload in request body
+                if (Object.keys(payloadObj).length > 0) {
+                  requestOptions.body = JSON.stringify(payloadObj)
+                  console.log(
+                    `Adding request body: ${JSON.stringify(
+                      payloadObj,
+                      null,
+                      2
+                    )}`
+                  )
+                }
               }
 
               // We'll skip the API call message to make the flow more seamless
@@ -861,10 +906,7 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
           if (node.type === 'yes_no_condition' && conditionType === 'yes-no') {
             try {
               // Ask the user for their answer
-              const userInput = await waitForUserInput(
-                conditionText,
-                'condition_answer'
-              )
+              const userInput = await waitForUserInput(conditionText)
 
               // Check if the user's response is affirmative
               const response = userInput.toLowerCase().trim()

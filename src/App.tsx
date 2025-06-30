@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ReactFlow,
   Background,
@@ -11,14 +11,15 @@ import {
   useReactFlow,
   ReactFlowProvider
 } from '@xyflow/react'
+import { FaRobot } from 'react-icons/fa'; // Import robot icon
+import { Resizable } from 're-resizable';
+import { UserButton } from '@clerk/clerk-react'
 
 import '@xyflow/react/dist/style.css'
 
 import { initialNodes, nodeTypes } from './nodes'
 import { initialEdges, edgeTypes } from './edges'
-import type { CityInputNodeSpecificData } from './nodes/CityInputNode'
-import type { AppNode } from './nodes/types'
-import UserProfile from './auth/UserProfile'
+import type { AppNode, CityInputNodeData } from './nodes/types'
 import type {
   WeatherDisplayNodeSpecificData,
   WeatherDisplayNodeData
@@ -37,6 +38,11 @@ export function FlowApp() {
   const [nodes, setNodes, onNodesChange] = useNodesState<AppNode>(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
   const { screenToFlowPosition } = useReactFlow()
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false); // Set initial state to false to keep AI Agent Preview closed on startup
+
+  const togglePreview = () => {
+    setIsPreviewOpen(!isPreviewOpen)
+  }
 
   const onCityChange = useCallback(
     (nodeId: string, newValue: string) => {
@@ -52,10 +58,10 @@ export function FlowApp() {
             return {
               ...n,
               data: {
-                ...(n.data as CityInputNodeSpecificData),
+                ...(n.data as CityInputNodeData),
                 value: newValue
               }
-            }
+            } as AppNode
           }
           // Automatically update connected weather display nodes (only if already connected)
           if (targetNodeIds.includes(n.id) && n.type === 'weatherDisplay') {
@@ -70,10 +76,10 @@ export function FlowApp() {
                 isLoading: true,
                 error: null
               }
-            }
+            } as AppNode
           }
           return n
-        })
+        }) as AppNode[]
       })
     },
     [setNodes, edges]
@@ -184,7 +190,7 @@ export function FlowApp() {
       if (sourceNode && targetNode) {
         // Connect: CityInput -> WeatherDisplay
         if (sourceNode.type === 'input' && targetNode.type === 'weatherDisplay') {
-          const sourceData = sourceNode.data as CityInputNodeSpecificData
+          const sourceData = sourceNode.data as CityInputNodeData
           setNodes(nds =>
             nds.map(n => {
               if (n.id === targetNode.id) {
@@ -267,7 +273,7 @@ export function FlowApp() {
         newNodeData = {
           label: 'Enter City', // Match the initial node label
           value: ''
-        } satisfies Omit<CityInputNodeSpecificData, 'onValueChange'>
+        } satisfies Omit<CityInputNodeData, 'onValueChange'>
         nodeStyle = { width: 305 } // Match the initial node width
       } else if (type === 'weatherDisplay') {
         newNodeData = {
@@ -345,59 +351,134 @@ export function FlowApp() {
         width: '100vw',
         background: '#f5f5f5' // Add explicit background color to entire app
       }}>
-        {/* Header with user profile */}
-        <div style={{ 
-          display: 'flex',
-          justifyContent: 'flex-end',
-          padding: '12px 20px',
-          borderBottom: '1px solid #e0e0e0',
-          background: '#f5f5f5'
-        }}>
-          <UserProfile />
-        </div>
         
+        {/* Floating User Button */}
+        <div
+          style={{
+            position: 'absolute',
+            top: '20px',
+            left: '20px',
+            zIndex: 1000,
+            background: 'rgba(255, 255, 255, 0.95)',
+            backdropFilter: 'blur(10px)',
+            borderRadius: '50px',
+            padding: '8px',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)',
+            border: '1px solid rgba(255, 255, 255, 0.2)'
+          }}
+        >
+          <UserButton 
+            appearance={{
+              elements: {
+                avatarBox: "width: 40px; height: 40px;",
+                userButtonPopoverCard: "backdrop-filter: blur(10px); background: rgba(255, 255, 255, 0.95);"
+              }
+            }}
+          />
+        </div>
+
         {/* Main content */}
-        <div style={{ display: 'flex', flexGrow: 1, flexDirection: 'row', background: '#ffffff' }}>
-          {/* Left side - Flow Builder (50% of screen) */}
-          <div style={{ width: '60%', height: '100%', display: 'flex', flexDirection: 'row', background: '#fafafa' }}>
+        <div style={{ display: 'flex', flexGrow: 1, flexDirection: 'row', background: '#ffffff', minHeight: 0 }}>
+          {/* Left side - Flow Builder */}
+          <div
+            style={{
+              width: isPreviewOpen ? '60%' : '100%',
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'row',
+              background: '#fafafa',
+              minWidth: 0, // Allow shrinking
+              transition: 'width 0.3s ease', // Smooth transition when toggling
+              flex: isPreviewOpen ? '1 1 60%' : '1 1 100%' // Use flex for better responsiveness
+            }}
+          >
             <Sidebar />
-            <div style={{ flexGrow: 1, height: '100%', position: 'relative', background: '#f5f5f5' }} ref={reactFlowWrapper}>
-            <ReactFlow
-              nodes={nodes}
-              nodeTypes={nodeTypes}
-              onNodesChange={onNodesChange}
-              edges={edges}
-              edgeTypes={edgeTypes}
-              onEdgesChange={onEdgesChange}
-              onConnect={onConnect}
-              onDrop={onDrop}
-              onDragOver={onDragOver}
-              fitView
+            <div
+              style={{
+                flexGrow: 1,
+                height: '100%',
+                position: 'relative',
+                background: '#f5f5f5'
+              }}
+              ref={reactFlowWrapper}
             >
-              <Background
-                color="#aaa"
-                gap={16}
-                size={1}
-              />
-              <MiniMap />
-              <Controls />
-              <WorkflowControls />
-            </ReactFlow>
+              <ReactFlow
+                nodes={nodes}
+                nodeTypes={nodeTypes}
+                onNodesChange={onNodesChange}
+                edges={edges}
+                edgeTypes={edgeTypes}
+                onEdgesChange={onEdgesChange}
+                onConnect={onConnect}
+                onDrop={onDrop}
+                onDragOver={onDragOver}
+                fitView
+              >
+                <Background
+                  color="#aaa"
+                  gap={16}
+                  size={1}
+                />
+                <MiniMap />
+                <Controls />
+                <WorkflowControls />
+              </ReactFlow>
+            </div>
           </div>
+          
+          {/* Right side - Chatbot Output */}
+          {isPreviewOpen && (
+            <Resizable
+              defaultSize={{ width: '25%', height: '100%' }}
+              minWidth={320} // Increased minimum width for better usability
+              maxWidth="70%" // Allow more flexibility
+              enable={{ left: true }} // Allow resizing from the left side
+              style={{
+                borderLeft: '1px solid #ddd',
+                display: 'flex',
+                flexDirection: 'column',
+                background: '#ffffff',
+                overflow: 'hidden', // Prevent overflow issues
+                position: 'relative' // Ensure proper positioning
+              }}
+              handleStyles={{
+                left: {
+                  width: '6px',
+                  background: 'transparent',
+                  cursor: 'col-resize'
+                }
+              }}
+            >
+              <WorkflowOutput onClose={togglePreview} />
+            </Resizable>
+          )}
         </div>
-        
-        {/* Right side - Chatbot Output (50% of screen) */}
-        <div style={{ 
-          width: '40%', 
-          height: '100%',
-          borderLeft: '1px solid #ddd',
-          display: 'flex',
-          flexDirection: 'column',
-          background: '#ffffff'
-        }}>
-          <WorkflowOutput />
-        </div>
-        </div>
+
+        {/* Button to reopen AI Agent Preview */}
+        {!isPreviewOpen && (
+          <button
+            onClick={togglePreview}
+            style={{
+              position: 'absolute',
+              bottom: '20px',
+              right: '220px', // Move further away from the minimap
+              padding: '10px',
+              background: '#1a73e8',
+              color: 'white',
+              border: 'none',
+              borderRadius: '50%',
+              cursor: 'pointer',
+              fontSize: '20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+              zIndex: 10 // Ensure it doesn't overlap with the minimap
+            }}
+          >
+            <FaRobot /> {/* Robot icon */}
+          </button>
+        )}
       </div>
     </WorkflowProvider>
   )

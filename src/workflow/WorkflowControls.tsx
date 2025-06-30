@@ -2,13 +2,20 @@ import React, { useState, useEffect } from 'react'
 import { useReactFlow } from '@xyflow/react'
 import { useWorkflow } from './WorkflowContext'
 import { AppNode } from '../nodes/types'
+import {
+  FiPlay,
+  FiSave,
+  FiFolder,
+  FiEdit3,
+  FiTrash2,
+  FiType,
+  FiX,
+  FiCheck
+} from 'react-icons/fi'
 
 const WorkflowControls: React.FC = () => {
   const [workflowName, setWorkflowName] = useState('')
   const [selectedWorkflow, setSelectedWorkflow] = useState('')
-  const [isEditing, setIsEditing] = useState(false)
-  const [editingName, setEditingName] = useState('')
-  const [showConfirmDelete, setShowConfirmDelete] = useState(false)
   const [isEditMode, setIsEditMode] = useState(false)
   const { getNodes, getEdges, setNodes, setEdges } = useReactFlow()
   const {
@@ -28,6 +35,27 @@ const WorkflowControls: React.FC = () => {
       setSelectedWorkflow(savedWorkflows[0])
     }
   }, [savedWorkflows, getNodes])
+
+  // Add CSS for animations
+  useEffect(() => {
+    const style = document.createElement('style')
+    style.textContent = `
+      @keyframes slideIn {
+        from {
+          opacity: 0;
+          transform: translateY(-10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+    `
+    document.head.appendChild(style)
+    return () => {
+      document.head.removeChild(style)
+    }
+  }, [])
 
   // Handle execute workflow button click
   const handleExecute = () => {
@@ -163,47 +191,63 @@ const WorkflowControls: React.FC = () => {
     <div
       style={{
         position: 'absolute',
-        top: 10,
-        left: 10,
+        top: '20px',
+        right: '20px',
         zIndex: 10,
-        background: isEditMode ? '#fff8e1' : 'white', // Yellow background when editing
-        borderRadius: 8,
-        boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
-        padding: '8px 12px',
+        background: 'rgba(255, 255, 255, 0.95)',
+        backdropFilter: 'blur(10px)',
+        borderRadius: '16px',
+        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)',
+        border: '1px solid rgba(255, 255, 255, 0.2)',
+        padding: '16px',
         display: 'flex',
         alignItems: 'center',
-        gap: '10px',
-        border: isEditMode ? '2px solid #FF9800' : 'none' // Orange border when editing
+        gap: '12px',
+        minWidth: '300px'
       }}
     >
       {isEditMode && (
         <div
           style={{
-            backgroundColor: '#FF9800',
+            background: 'linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%)',
             color: 'white',
-            padding: '4px 8px',
-            borderRadius: 4,
+            padding: '6px 12px',
+            borderRadius: '8px',
             fontSize: '12px',
-            fontWeight: 'bold'
+            fontWeight: '600',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
           }}
         >
+          <FiEdit3 />
           Editing: {selectedWorkflow}
         </div>
       )}
+
       {/* Execute workflow button */}
       <button
         onClick={handleExecute}
         disabled={isExecuting}
         style={{
-          padding: '8px 12px',
-          backgroundColor: isExecuting ? '#ccc' : '#4CAF50',
+          padding: '10px 16px',
+          background: isExecuting
+            ? 'linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%)'
+            : 'linear-gradient(135deg, #2ecc71 0%, #27ae60 100%)',
           color: 'white',
           border: 'none',
-          borderRadius: 4,
+          borderRadius: '10px',
           cursor: isExecuting ? 'not-allowed' : 'pointer',
-          fontWeight: 'bold'
+          fontWeight: '600',
+          fontSize: '14px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+          transition: 'all 0.2s ease'
         }}
       >
+        <FiPlay />
         {isExecuting ? 'Running...' : 'Run Workflow'}
       </button>
 
@@ -213,15 +257,22 @@ const WorkflowControls: React.FC = () => {
           <button
             onClick={handleSaveChanges}
             style={{
-              padding: '8px 12px',
-              backgroundColor: '#FF9800',
+              padding: '10px 16px',
+              background: 'linear-gradient(135deg, #f39c12 0%, #e67e22 100%)',
               color: 'white',
               border: 'none',
-              borderRadius: 4,
+              borderRadius: '10px',
               cursor: 'pointer',
-              fontWeight: 'bold'
+              fontWeight: '600',
+              fontSize: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+              transition: 'all 0.2s ease'
             }}
           >
+            <FiCheck />
             Save Changes
           </button>
           <button
@@ -239,15 +290,22 @@ const WorkflowControls: React.FC = () => {
               }
             }}
             style={{
-              padding: '8px 12px',
-              backgroundColor: '#9E9E9E',
+              padding: '10px 16px',
+              background: 'linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%)',
               color: 'white',
               border: 'none',
-              borderRadius: 4,
+              borderRadius: '10px',
               cursor: 'pointer',
-              fontWeight: 'bold'
+              fontWeight: '600',
+              fontSize: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+              transition: 'all 0.2s ease'
             }}
           >
+            <FiX />
             Cancel
           </button>
         </>
@@ -262,33 +320,43 @@ const WorkflowControls: React.FC = () => {
       >
         <summary
           style={{
-            padding: '8px 12px',
-            backgroundColor: '#2196F3',
+            padding: '10px 16px',
+            background: 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)',
             color: 'white',
             border: 'none',
-            borderRadius: 4,
+            borderRadius: '10px',
             cursor: 'pointer',
-            fontWeight: 'bold',
-            listStyle: 'none'
+            fontWeight: '600',
+            fontSize: '14px',
+            listStyle: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+            transition: 'all 0.2s ease'
           }}
         >
+          <FiFolder />
           Workflow Actions
         </summary>
         <div
           style={{
             position: 'absolute',
             top: '100%',
-            left: 0,
-            marginTop: '5px',
-            background: 'white',
-            borderRadius: 4,
-            boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
-            padding: '8px',
+            right: '0',
+            marginTop: '8px',
+            background: 'rgba(255, 255, 255, 0.98)',
+            backdropFilter: 'blur(10px)',
+            borderRadius: '12px',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)',
+            border: '1px solid rgba(255, 255, 255, 0.3)',
+            padding: '16px',
             zIndex: 20,
-            width: '250px'
+            width: '280px',
+            animation: 'slideIn 0.2s ease-out'
           }}
         >
-          <div style={{ marginBottom: '10px' }}>
+          <div style={{ marginBottom: '16px' }}>
             <input
               type='text'
               placeholder='Enter workflow name'
@@ -296,27 +364,38 @@ const WorkflowControls: React.FC = () => {
               onChange={e => setWorkflowName(e.target.value)}
               style={{
                 width: '100%',
-                padding: '6px',
-                marginBottom: '8px',
-                borderRadius: 4,
-                border: '1px solid #ddd',
-                boxSizing: 'border-box'
+                padding: '10px 12px',
+                marginBottom: '12px',
+                borderRadius: '8px',
+                border: '1px solid rgba(0, 0, 0, 0.1)',
+                boxSizing: 'border-box',
+                fontSize: '14px',
+                background: 'rgba(255, 255, 255, 0.8)',
+                backdropFilter: 'blur(5px)'
               }}
             />
             <button
               onClick={handleSave}
               style={{
-                padding: '6px',
-                backgroundColor: '#2196F3',
+                padding: '10px 12px',
+                background: 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)',
                 color: 'white',
                 border: 'none',
-                borderRadius: 4,
+                borderRadius: '8px',
                 cursor: 'pointer',
                 width: '100%',
-                marginBottom: '10px',
-                fontSize: '13px'
+                marginBottom: '16px',
+                fontSize: '14px',
+                fontWeight: '600',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                transition: 'all 0.2s ease'
               }}
             >
+              <FiSave />
               Save Workflow
             </button>
           </div>
@@ -327,11 +406,14 @@ const WorkflowControls: React.FC = () => {
               onChange={e => setSelectedWorkflow(e.target.value)}
               style={{
                 width: '100%',
-                padding: '6px',
-                marginBottom: '8px',
-                borderRadius: 4,
-                border: '1px solid #ddd',
-                boxSizing: 'border-box'
+                padding: '10px 12px',
+                marginBottom: '12px',
+                borderRadius: '8px',
+                border: '1px solid rgba(0, 0, 0, 0.1)',
+                boxSizing: 'border-box',
+                fontSize: '14px',
+                background: 'rgba(255, 255, 255, 0.8)',
+                backdropFilter: 'blur(5px)'
               }}
             >
               <option value=''>Select a workflow</option>
@@ -341,22 +423,31 @@ const WorkflowControls: React.FC = () => {
                 </option>
               ))}
             </select>
-            <div style={{ marginBottom: '8px' }}>
+            <div style={{ marginBottom: '12px' }}>
               <button
                 onClick={handleLoad}
                 disabled={!selectedWorkflow}
                 style={{
-                  padding: '6px',
-                  backgroundColor: '#FF9800',
+                  padding: '10px 12px',
+                  background: !selectedWorkflow
+                    ? 'linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%)'
+                    : 'linear-gradient(135deg, #f39c12 0%, #e67e22 100%)',
                   color: 'white',
                   border: 'none',
-                  borderRadius: 4,
+                  borderRadius: '8px',
                   cursor: !selectedWorkflow ? 'not-allowed' : 'pointer',
-                  opacity: !selectedWorkflow ? 0.7 : 1,
                   width: '100%',
-                  fontSize: '13px'
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                  transition: 'all 0.2s ease'
                 }}
               >
+                <FiFolder />
                 Load Workflow
               </button>
             </div>
@@ -365,55 +456,79 @@ const WorkflowControls: React.FC = () => {
             {selectedWorkflow && (
               <div
                 style={{
-                  display: 'flex',
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr 1fr',
                   gap: '8px',
-                  marginTop: '8px',
-                  flexWrap: 'wrap'
+                  marginTop: '12px'
                 }}
               >
                 <button
                   onClick={handleEdit}
                   style={{
-                    padding: '6px',
-                    backgroundColor: '#2196F3',
+                    padding: '8px 10px',
+                    background:
+                      'linear-gradient(135deg, #3498db 0%, #2980b9 100%)',
                     color: 'white',
                     border: 'none',
-                    borderRadius: 4,
+                    borderRadius: '6px',
                     cursor: 'pointer',
-                    flex: 1,
-                    fontSize: '13px'
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '4px',
+                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+                    transition: 'all 0.2s ease'
                   }}
                 >
+                  <FiEdit3 />
                   Edit
                 </button>
                 <button
                   onClick={handleRename}
                   style={{
-                    padding: '6px',
-                    backgroundColor: '#4CAF50',
+                    padding: '8px 10px',
+                    background:
+                      'linear-gradient(135deg, #2ecc71 0%, #27ae60 100%)',
                     color: 'white',
                     border: 'none',
-                    borderRadius: 4,
+                    borderRadius: '6px',
                     cursor: 'pointer',
-                    flex: 1,
-                    fontSize: '13px'
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '4px',
+                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+                    transition: 'all 0.2s ease'
                   }}
                 >
+                  <FiType />
                   Rename
                 </button>
                 <button
                   onClick={handleDelete}
                   style={{
-                    padding: '6px',
-                    backgroundColor: '#F44336',
+                    padding: '8px 10px',
+                    background:
+                      'linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)',
                     color: 'white',
                     border: 'none',
-                    borderRadius: 4,
+                    borderRadius: '6px',
                     cursor: 'pointer',
-                    flex: 1,
-                    fontSize: '13px'
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '4px',
+                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+                    transition: 'all 0.2s ease'
                   }}
                 >
+                  <FiTrash2 />
                   Delete
                 </button>
               </div>

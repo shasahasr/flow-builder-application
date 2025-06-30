@@ -1,5 +1,3 @@
-import { WorkflowContext } from './WorkflowContext'
-
 // This file contains patches to the WorkflowContext to add support for new node types
 // without changing the original WorkflowContext.tsx file.
 
@@ -75,10 +73,10 @@ export const executeNodeWithYesNoCondition = async (
       )
 
       // Execute all nodes connected to matching condition paths
-      for (const edge of filteredEdges) {
+      for (let i = 0; i < filteredEdges.length; i++) {
         // Call the original executeNode function
         // This is just a stub - you would call your actual function here
-        // await executeNode(edge.target, nodeMap, nodeOutgoingEdges, nextContextData);
+        // await executeNode(filteredEdges[i].target, nodeMap, nodeOutgoingEdges, nextContextData);
       }
 
       return nextContextData

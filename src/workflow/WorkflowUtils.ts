@@ -1,4 +1,4 @@
-import { Edge, Node } from '@xyflow/react'
+import { Edge } from '@xyflow/react'
 import { AppNode } from '../nodes/types'
 
 /**

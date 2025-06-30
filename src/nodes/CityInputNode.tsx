@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { Handle, Position, useReactFlow, type NodeProps } from '@xyflow/react'
-import { type CityInputNodeData } from './types'
 
 // City Input node component optimized for weather location input
 function CityInputNode ({ data, id, isConnectable }: NodeProps) {
