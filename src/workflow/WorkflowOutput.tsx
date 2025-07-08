@@ -40,11 +40,8 @@ const WorkflowOutput: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
       >
         <div>
           <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>
-            🤖 AI Agent Preview
+            AI Agent Preview
           </h2>
-          <p style={{ margin: '2px 0 0 0', fontSize: '12px', opacity: 0.9 }}>
-            Test your workflow conversation
-          </p>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
           <button

@@ -1,6 +1,6 @@
 import { NodeProps, Handle, Position, useReactFlow } from '@xyflow/react'
 import { useState, useEffect } from 'react'
-import { nodeStyles, getNodeContainerStyle } from './nodeStyles'
+import { nodeStyles, getNodeContainerStyle } from '../nodeStyles'
 
 // Define the API call node data structure with direct mapping to fetch parameters
 export type ApiCallNodeData = {

@@ -1,10 +1,10 @@
 import type { Node } from '@xyflow/react'
 import type { WeatherDisplayNodeData } from './WeatherDisplayNode'
 import type { ActivitySuggestionNodeData } from './ActivitySuggestionNode'
-import type { DisplayMessageNodeData } from './DisplayMessageNode'
+import type { DisplayMessageNodeData } from './elements/DisplayMessageNode'
 import type { InputParameterNodeData } from './InputParameterNode'
-import type { ApiCallNodeData } from './ApiCallNode'
-import type { ConditionNodeData } from './ConditionNode'
+import type { ApiCallNodeData } from './elements/ApiCallNode'
+import type { ConditionNodeData } from './elements/ConditionNode'
 import type { YesNoConditionNodeData } from './YesNoConditionNode'
 
 export type PositionLoggerNode = Node<{ label?: string }, 'position-logger'>

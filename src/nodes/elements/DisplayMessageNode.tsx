@@ -1,6 +1,6 @@
 import { Handle, Position, type NodeProps, useReactFlow } from '@xyflow/react'
 import { useState, useEffect } from 'react'
-import { getNodeContainerStyle, nodeStyles } from './nodeStyles'
+import { getNodeContainerStyle, nodeStyles } from '../nodeStyles'
 
 // Define the data type for this node
 export type DisplayMessageNodeData = {

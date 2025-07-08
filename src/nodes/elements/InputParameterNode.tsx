@@ -1,6 +1,6 @@
 import { NodeProps, Handle, Position, useReactFlow } from '@xyflow/react'
 import { useState, useEffect } from 'react'
-import { getNodeContainerStyle, nodeStyles } from './nodeStyles'
+import { getNodeContainerStyle, nodeStyles } from '../nodeStyles'
 
 // Define the input parameter node data structure
 export type InputParameterNodeData = {

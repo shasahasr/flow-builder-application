@@ -1,7 +1,7 @@
 import { NodeProps, Handle, Position, useReactFlow } from '@xyflow/react'
 import { useState, useEffect } from 'react'
-import { validateCondition, getConditionExamples } from './conditionUtils'
-import { getNodeContainerStyle, nodeStyles } from './nodeStyles'
+import { validateCondition, getConditionExamples } from '../conditionUtils'
+import { getNodeContainerStyle, nodeStyles } from '../nodeStyles'
 
 // Define the condition node data structure
 export type ConditionNodeData = {
