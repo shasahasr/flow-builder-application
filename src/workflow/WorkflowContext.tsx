@@ -482,6 +482,86 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
           break
         }
 
+        case 'llm_node': {
+          try {
+            // Get LLM details from node data
+            let ai = 'chatgpt'
+            let apiKey = ''
+            let model = 'gpt-3.5-turbo'
+            let query = ''
+
+            if (node.data && typeof node.data === 'object') {
+              if ('ai' in node.data) ai = node.data.ai as string
+              if ('apiKey' in node.data) apiKey = node.data.apiKey as string
+              if ('model' in node.data) model = node.data.model as string
+              if ('query' in node.data) query = node.data.query as string
+            }
+
+            // Process any variables in the query
+            query = processMessage(query, contextData)
+
+            if (!apiKey) {
+              addOutputMessage('API key is required for LLM calls', 'assistant')
+              break
+            }
+
+            if (!query.trim()) {
+              addOutputMessage('Query is required for LLM calls', 'assistant')
+              break
+            }
+
+            console.log(`Making LLM call to ${ai} with model ${model}...`)
+
+            // Make OpenAI API call
+            const response = await fetch(
+              'https://api.openai.com/v1/chat/completions',
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${apiKey}`
+                },
+                body: JSON.stringify({
+                  model: model,
+                  messages: [
+                    {
+                      role: 'user',
+                      content: query
+                    }
+                  ],
+                  max_tokens: 1000,
+                  temperature: 0.7
+                })
+              }
+            )
+
+            if (!response.ok) {
+              throw new Error(
+                `OpenAI API returned status ${response.status}: ${response.statusText}`
+              )
+            }
+
+            const responseData = await response.json()
+
+            // Extract the response content
+            const llmResponse =
+              responseData.choices?.[0]?.message?.content ||
+              'No response received'
+
+            // Store the response in context
+            nextContextData['llmResponse'] = llmResponse
+
+            // Add the LLM response to the output
+            addOutputMessage(llmResponse, 'assistant')
+
+            console.log(`LLM call completed successfully`)
+          } catch (error) {
+            console.error(`LLM call failed: ${error}`)
+            addOutputMessage(`LLM call failed: ${error}`, 'assistant')
+          }
+          break
+        }
+
         case 'condition':
         case 'yes_no_condition': {
           // Access condition expression and name from the node data

@@ -301,6 +301,10 @@ export function FlowApp() {
         newNodeData = {
           label: 'Condition'
         }
+      } else if (type === 'llm_node') {
+        newNodeData = {
+          label: 'LLM Node'
+        }
       }
 
       const newNode: AppNode = {

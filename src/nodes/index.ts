@@ -7,6 +7,7 @@ import DisplayMessageNode from './elements/DisplayMessageNode';
 import InputParameterNode from './elements/InputParameterNode';
 import ApiCallNode from './elements/ApiCallNode';
 import ConditionNode from './elements/ConditionNode';
+import LLMNode from './elements/LLMNode';
 
 export const initialNodes: AppNode[] = [
   // Initial nodes for the workflow
@@ -20,4 +21,5 @@ export const nodeTypes = {
   input_parameter: InputParameterNode,
   api_call: ApiCallNode,
   condition: ConditionNode,
+  llm_node: LLMNode,
 } satisfies NodeTypes;

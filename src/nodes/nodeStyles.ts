@@ -132,11 +132,13 @@ export const nodeStyles = {
   },
 
   handle: {
-    width: '14px',
-    height: '14px',
+    width: '10px',
+    height: '10px',
     border: '2px solid #ffffff',
     borderRadius: '50%',
-    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
+    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+    pointerEvents: 'auto',
+    padding: '5px' // Adjust mouse recognition area
   },
 
   handleInput: {

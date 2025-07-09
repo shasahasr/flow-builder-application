@@ -193,6 +193,20 @@ const SidebarMenu: React.FC = () => {
             <FiCpu />
             API Call
           </div>
+          <div
+            style={menuItemStyle}
+            onDragStart={e => onDragStart(e, 'llm_node')}
+            draggable
+            onMouseEnter={e => {
+              e.currentTarget.style.background = 'rgba(102, 126, 234, 0.1)'
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = 'transparent'
+            }}
+          >
+            <FiCpu />
+            LLM Node
+          </div>
         </div>
       )}
     </div>

@@ -7,6 +7,15 @@ import type { ApiCallNodeData } from './elements/ApiCallNode'
 import type { ConditionNodeData } from './elements/ConditionNode'
 import type { YesNoConditionNodeData } from './YesNoConditionNode'
 
+// Define LLM node data type
+export type LLMNodeData = {
+  label?: string
+  ai?: string
+  apiKey?: string
+  model?: string
+  query?: string
+}
+
 export type PositionLoggerNode = Node<{ label?: string }, 'position-logger'>
 
 // Define a type for the city input node data
@@ -46,6 +55,7 @@ export type InputParameterNodeType = Node<
 >
 export type ApiCallNodeType = Node<ApiCallNodeData, 'api_call'>
 export type ConditionNodeType = Node<ConditionNodeData, 'condition'>
+export type LLMNodeType = Node<LLMNodeData, 'llm_node'>
 export type YesNoConditionNodeType = Node<
   YesNoConditionNodeData,
   'yes_no_condition'
@@ -61,6 +71,7 @@ export type AppNode =
   | InputParameterNodeType
   | ApiCallNodeType
   | ConditionNodeType
+  | LLMNodeType
   | YesNoConditionNodeType
   | Node<{ label?: string | undefined; [key: string]: unknown }, 'default'>
   | Node<{ label?: string | undefined; [key: string]: unknown }, 'output'>
