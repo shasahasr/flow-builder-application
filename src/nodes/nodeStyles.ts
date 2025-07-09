@@ -37,6 +37,11 @@ export const nodeColors = {
     background: '#f0f9ff',
     border: '#0ea5e9',
     accent: '#0284c7'
+  },
+  llm: {
+    background: '#f3e8ff',
+    border: '#a855f7',
+    accent: '#9333ea'
   }
 }
 
@@ -184,6 +189,7 @@ export const getNodeContainerStyle = (
     | 'condition'
     | 'api'
     | 'message'
+    | 'llm'
     | 'default' = 'default',
   hasError = false
 ) => {
@@ -223,6 +229,12 @@ export const getNodeContainerStyle = (
         ...baseStyle,
         background: nodeColors.message.background,
         borderColor: nodeColors.message.border
+      }
+    case 'llm':
+      return {
+        ...baseStyle,
+        background: nodeColors.llm.background,
+        borderColor: nodeColors.llm.border
       }
     default:
       return baseStyle

@@ -45,7 +45,7 @@ const LLMNode = ({ data, isConnectable, id }: NodeProps) => {
   const modelOptions = ['gpt-3.5-turbo', 'gpt-4', 'text-davinci-003', 'gpt-4o']
 
   return (
-    <div style={getNodeContainerStyle('api')}>
+    <div style={getNodeContainerStyle('llm')}>
       <Handle
         type='target'
         position={Position.Top}
