@@ -1,78 +1,41 @@
-import type { Node } from '@xyflow/react'
-import type { WeatherDisplayNodeData } from './WeatherDisplayNode'
-import type { ActivitySuggestionNodeData } from './ActivitySuggestionNode'
-import type { DisplayMessageNodeData } from './elements/DisplayMessageNode'
-import type { InputParameterNodeData } from './InputParameterNode'
-import type { ApiCallNodeData } from './elements/ApiCallNode'
-import type { ConditionNodeData } from './elements/ConditionNode'
-import type { YesNoConditionNodeData } from './YesNoConditionNode'
+import type { Node } from "@xyflow/react";
+import type { DisplayMessageNodeData } from "./elements/DisplayMessageNode";
+import type { ApiCallNodeData } from "./elements/ApiCallNode";
+import type { ConditionNodeData } from "./elements/ConditionNode";
+import type { InputParameterNodeData } from "./elements/InputParameterNode";
 
 // Define LLM node data type
 export type LLMNodeData = {
-  label?: string
-  ai?: string
-  apiKey?: string
-  model?: string
-  query?: string
-}
+  label?: string;
+  ai?: string;
+  apiKey?: string;
+  model?: string;
+  query?: string;
+};
 
-export type PositionLoggerNode = Node<{ label?: string }, 'position-logger'>
-
-// Define a type for the city input node data
-export type CityInputNodeData = {
-  label?: string
-  name?: string
-  question?: string
-  paramName?: string
-  saveAsVariable?: boolean
-  variableName?: string
-  value?: string // Added value to store the input
-}
-
-// Define the city input node type, explicitly using 'input' as the type literal
-export type CityInputNode = Node<CityInputNodeData, 'input'>
-
-// Define the weather display node type
-export type WeatherDisplayNodeType = Node<
-  WeatherDisplayNodeData,
-  'weatherDisplay'
->
-
-// Define the activity suggestion node type
-export type ActivitySuggestionNodeType = Node<
-  ActivitySuggestionNodeData,
-  'activitySuggestion'
->
+export type PositionLoggerNode = Node<{ label?: string }, "position-logger">;
 
 // Define new AI workflow node types
 export type DisplayMessageNodeType = Node<
   DisplayMessageNodeData,
-  'display_message'
->
+  "display_message"
+>;
 export type InputParameterNodeType = Node<
   InputParameterNodeData,
-  'input_parameter'
->
-export type ApiCallNodeType = Node<ApiCallNodeData, 'api_call'>
-export type ConditionNodeType = Node<ConditionNodeData, 'condition'>
-export type LLMNodeType = Node<LLMNodeData, 'llm_node'>
-export type YesNoConditionNodeType = Node<
-  YesNoConditionNodeData,
-  'yes_no_condition'
->
+  "input_parameter"
+>;
+export type ApiCallNodeType = Node<ApiCallNodeData, "api_call">;
+export type ConditionNodeType = Node<ConditionNodeData, "condition">;
+export type LLMNodeType = Node<LLMNodeData, "llm_node">;
 
-// Update AppNode to include the more specific CityInputNode and other node types
+// Update AppNode to include the more specific node types
 export type AppNode =
-  | CityInputNode
   | PositionLoggerNode
-  | WeatherDisplayNodeType
-  | ActivitySuggestionNodeType
   | DisplayMessageNodeType
   | InputParameterNodeType
   | ApiCallNodeType
   | ConditionNodeType
   | LLMNodeType
-  | YesNoConditionNodeType
-  | Node<{ label?: string | undefined; [key: string]: unknown }, 'default'>
-  | Node<{ label?: string | undefined; [key: string]: unknown }, 'output'>
-  | Node<{ label?: string | undefined; [key: string]: unknown }, 'group'>
+  | Node<{ label?: string | undefined; [key: string]: unknown }, "default">
+  | Node<{ label?: string | undefined; [key: string]: unknown }, "output">
+  | Node<{ label?: string | undefined; [key: string]: unknown }, "group">;

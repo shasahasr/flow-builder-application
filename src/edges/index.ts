@@ -1,4 +1,4 @@
-import type { Edge, EdgeTypes } from '@xyflow/react';
+import type { Edge, EdgeTypes } from "@xyflow/react";
 
 export const initialEdges: Edge[] = [
   // Add your initial edges here!

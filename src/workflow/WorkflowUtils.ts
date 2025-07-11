@@ -1,5 +1,5 @@
-import { Edge } from '@xyflow/react'
-import { AppNode } from '../nodes/types'
+import { Edge } from "@xyflow/react";
+import { AppNode } from "../nodes/types";
 
 /**
  * Utility class for working with workflow variables and expressions
@@ -9,127 +9,127 @@ export class WorkflowUtils {
    * Evaluates a variable reference expression
    * Format: ${nodeId.paramName}
    */
-  static evaluateExpression (
+  static evaluateExpression(
     expression: string,
-    context: Record<string, any>
+    context: Record<string, any>,
   ): string {
     // Simple reference pattern: ${nodeId.paramName}
-    const refPattern = /\${([^}]+)}/g
+    const refPattern = /\${([^}]+)}/g;
 
     return expression.replace(refPattern, (match, path) => {
       try {
         // Check if the path is directly in the context
         if (context[path] !== undefined) {
-          const value = context[path]
-          return this.formatValue(value)
+          const value = context[path];
+          return this.formatValue(value);
         }
 
         // Otherwise, handle nested paths
-        const pathParts = path.split('.')
-        let value = context
+        const pathParts = path.split(".");
+        let value = context;
 
         for (const part of pathParts) {
-          if (value === undefined || value === null) return match
-          value = value[part]
+          if (value === undefined || value === null) return match;
+          value = value[part];
         }
 
-        return this.formatValue(value)
+        return this.formatValue(value);
       } catch (e) {
-        console.error('Error evaluating expression:', e)
-        return match
+        console.error("Error evaluating expression:", e);
+        return match;
       }
-    })
+    });
   }
 
   /**
    * Format a value for display in a string
    */
-  static formatValue (value: any): string {
+  static formatValue(value: any): string {
     if (value === undefined || value === null) {
-      return ''
+      return "";
     }
 
-    if (typeof value === 'string') {
-      return value
+    if (typeof value === "string") {
+      return value;
     }
 
-    if (typeof value === 'number' || typeof value === 'boolean') {
-      return value.toString()
+    if (typeof value === "number" || typeof value === "boolean") {
+      return value.toString();
     }
 
-    if (typeof value === 'object') {
+    if (typeof value === "object") {
       try {
-        return JSON.stringify(value, null, 2)
+        return JSON.stringify(value, null, 2);
       } catch (e) {
-        console.error('Error stringifying object:', e)
-        return '[Object]'
+        console.error("Error stringifying object:", e);
+        return "[Object]";
       }
     }
 
-    return String(value)
+    return String(value);
   }
 
   /**
    * Builds a context object from workflow nodes and their data
    */
-  static buildWorkflowContext (nodes: AppNode[]): Record<string, any> {
-    const context: Record<string, any> = {}
+  static buildWorkflowContext(nodes: AppNode[]): Record<string, any> {
+    const context: Record<string, any> = {};
 
-    nodes.forEach(node => {
+    nodes.forEach((node) => {
       if (node.id && node.data) {
-        context[node.id] = { ...node.data }
+        context[node.id] = { ...node.data };
       }
-    })
+    });
 
-    return context
+    return context;
   }
 
   /**
    * Gets an ordered execution sequence for nodes based on connections
    */
-  static getExecutionSequence (nodes: AppNode[], edges: Edge[]): string[] {
-    const adjacencyList: Record<string, string[]> = {}
-    const inDegree: Record<string, number> = {}
-    const nodeIds = nodes.map(node => node.id)
+  static getExecutionSequence(nodes: AppNode[], edges: Edge[]): string[] {
+    const adjacencyList: Record<string, string[]> = {};
+    const inDegree: Record<string, number> = {};
+    const nodeIds = nodes.map((node) => node.id);
 
     // Initialize
-    nodeIds.forEach(id => {
-      adjacencyList[id] = []
-      inDegree[id] = 0
-    })
+    nodeIds.forEach((id) => {
+      adjacencyList[id] = [];
+      inDegree[id] = 0;
+    });
 
     // Build adjacency list and calculate in-degrees
-    edges.forEach(edge => {
-      const { source, target, sourceHandle } = edge
+    edges.forEach((edge) => {
+      const { source, target, sourceHandle } = edge;
 
       // Skip condition false edges in the execution sequence
       // They will be handled separately during execution
-      if (sourceHandle === 'false') return
+      if (sourceHandle === "false") return;
 
       if (adjacencyList[source]) {
-        adjacencyList[source].push(target)
+        adjacencyList[source].push(target);
       }
 
-      inDegree[target] = (inDegree[target] || 0) + 1
-    })
+      inDegree[target] = (inDegree[target] || 0) + 1;
+    });
 
     // Nodes with no incoming edges (start nodes)
-    const queue = nodeIds.filter(id => inDegree[id] === 0)
-    const result: string[] = []
+    const queue = nodeIds.filter((id) => inDegree[id] === 0);
+    const result: string[] = [];
 
     // Topological sort
     while (queue.length > 0) {
-      const current = queue.shift()!
-      result.push(current)
+      const current = queue.shift()!;
+      result.push(current);
 
       for (const neighbor of adjacencyList[current]) {
-        inDegree[neighbor]--
+        inDegree[neighbor]--;
         if (inDegree[neighbor] === 0) {
-          queue.push(neighbor)
+          queue.push(neighbor);
         }
       }
     }
 
-    return result
+    return result;
   }
 }

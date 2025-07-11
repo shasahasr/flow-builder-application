@@ -6,7 +6,7 @@
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-  
+
   /* Clerk custom styling */
   --clerk-primary: #1a73e8;
   --clerk-primary-contrast-text: #ffffff;
@@ -116,7 +116,7 @@ body,
 }
 
 /* Footer link styles */
-.cl-footerActionText, 
+.cl-footerActionText,
 .cl-footerActionLink {
   font-size: 14px !important;
 }
@@ -133,7 +133,8 @@ body,
 }
 
 /* Ensure the auth page container has enough room for the card */
-.clerk-sign-in-wrapper, .clerk-sign-up-wrapper {
+.clerk-sign-in-wrapper,
+.clerk-sign-up-wrapper {
   display: flex !important;
   justify-content: center !important;
   width: 100% !important;
@@ -164,13 +165,17 @@ body,
 
 /* Add a subtle bottom fade effect to ensure content doesn't appear cut off */
 .cl-card::after {
-  content: '';
+  content: "";
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
   height: 20px;
-  background: linear-gradient(to top, rgba(255,255,255,0.9), rgba(255,255,255,0));
+  background: linear-gradient(
+    to top,
+    rgba(255, 255, 255, 0.9),
+    rgba(255, 255, 255, 0)
+  );
   z-index: 1;
   pointer-events: none;
 }
