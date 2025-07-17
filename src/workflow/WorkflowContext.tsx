@@ -109,15 +109,22 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
   // Clear output messages
   const clearOutput = useCallback(() => {
     setWorkflowOutput([]);
+    // Clear any active LLM conversation handler
+    (window as any).currentLLMHandler = null;
+    setWaitingForUserInput(false);
   }, []);
 
   // Function to handle user input submission
   const submitUserInput = useCallback((text: string) => {
-    if (userInputResolveRef.current) {
-      // Add the user's message to the output
-      addOutputMessage(text, "user");
+    // Add the user's message to the output
+    addOutputMessage(text, "user");
 
-      // Resolve the promise with the user's input
+    // Check if we have an active LLM conversation handler
+    if ((window as any).currentLLMHandler) {
+      // Handle the conversation with the LLM
+      (window as any).currentLLMHandler(text);
+    } else if (userInputResolveRef.current) {
+      // Fallback to the original promise-based user input handling
       userInputResolveRef.current(text);
       userInputResolveRef.current = null;
       setWaitingForUserInput(false);
@@ -488,17 +495,16 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
             let ai = "chatgpt";
             let apiKey = "";
             let model = "gpt-3.5-turbo";
-            let query = "";
+            let instructions = "";
+            let tools: any[] = [];
 
             if (node.data && typeof node.data === "object") {
               if ("ai" in node.data) ai = node.data.ai as string;
               if ("apiKey" in node.data) apiKey = node.data.apiKey as string;
               if ("model" in node.data) model = node.data.model as string;
-              if ("query" in node.data) query = node.data.query as string;
+              if ("instructions" in node.data) instructions = node.data.instructions as string;
+              if ("tools" in node.data) tools = node.data.tools as any[];
             }
-
-            // Process any variables in the query
-            query = processMessage(query, contextData);
 
             if (!apiKey) {
               addOutputMessage(
@@ -508,59 +514,113 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
               break;
             }
 
-            if (!query.trim()) {
-              addOutputMessage("Query is required for LLM calls", "assistant");
+            if (!instructions.trim()) {
+              addOutputMessage("Agent instructions are required to start the conversation", "assistant");
               break;
             }
 
-            console.log(`Making LLM call to ${ai} with model ${model}...`);
-
-            // Make OpenAI API call
-            const response = await fetch(
-              "https://api.openai.com/v1/chat/completions",
-              {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${apiKey}`,
-                },
-                body: JSON.stringify({
-                  model: model,
-                  messages: [
-                    {
-                      role: "user",
-                      content: query,
-                    },
-                  ],
-                  max_tokens: 1000,
-                  temperature: 0.7,
-                }),
-              },
-            );
-
-            if (!response.ok) {
-              throw new Error(
-                `OpenAI API returned status ${response.status}: ${response.statusText}`,
-              );
+            // Generate a natural introduction based on the instructions
+            let naturalIntro = "";
+            if (instructions.toLowerCase().includes("sales assistant")) {
+              naturalIntro = "Hello! I'm your AI sales assistant, here to help you with product inquiries and support your sales needs.";
+            } else if (instructions.toLowerCase().includes("customer service")) {
+              naturalIntro = "Hi there! I'm your AI customer service representative, ready to assist you with any questions or concerns.";
+            } else if (instructions.toLowerCase().includes("support")) {
+              naturalIntro = "Welcome! I'm your AI support agent, here to help you resolve any issues and answer your questions.";
+            } else if (instructions.toLowerCase().includes("assistant")) {
+              naturalIntro = "Hello! I'm your AI assistant, ready to help you with whatever you need.";
+            } else {
+              // Fallback for custom instructions - make it sound natural
+              naturalIntro = `Hello! I'm an AI agent specialized in helping you. ${instructions.charAt(0).toLowerCase() + instructions.slice(1)}`;
             }
 
-            const responseData = await response.json();
+            const introMessage = `🤖 ${naturalIntro}
 
-            // Extract the response content
-            const llmResponse =
-              responseData.choices?.[0]?.message?.content ||
-              "No response received";
+${tools.length > 0 ? `I have access to ${tools.length} specialized tool(s) to provide you with comprehensive assistance.` : ''}
 
-            // Store the response in context
-            nextContextData["llmResponse"] = llmResponse;
+What can I help you with today?`;
+            
+            addOutputMessage(introMessage, "assistant");
 
-            // Add the LLM response to the output
-            addOutputMessage(llmResponse, "assistant");
+            // Set up conversational loop - wait for user input
+            setWaitingForUserInput(true);
+            
+            // Set up the conversation handler for this LLM node
+            const handleConversation = async (userMessage: string) => {
+              try {
+                console.log(`Making LLM call to ${ai} with model ${model}...`);
 
-            console.log(`LLM call completed successfully`);
+                // Build system prompt with tools context
+                let systemPrompt = instructions;
+                if (tools.length > 0) {
+                  const toolDescriptions = tools.map(tool => 
+                    `Tool: ${tool.name} - ${tool.description} (${tool.method} ${tool.url})`
+                  ).join('\n');
+                  
+                  systemPrompt += `\n\nAVAILABLE TOOLS:\n${toolDescriptions}\n\nWhen you need to use a tool, mention it in your response and I'll help execute it.`;
+                }
+
+                // Make OpenAI API call
+                const response = await fetch(
+                  "https://api.openai.com/v1/chat/completions",
+                  {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      Authorization: `Bearer ${apiKey}`,
+                    },
+                    body: JSON.stringify({
+                      model: model,
+                      messages: [
+                        {
+                          role: "system",
+                          content: systemPrompt,
+                        },
+                        {
+                          role: "user",
+                          content: userMessage,
+                        },
+                      ],
+                      max_tokens: 1000,
+                      temperature: 0.7,
+                    }),
+                  },
+                );
+
+                if (!response.ok) {
+                  throw new Error(
+                    `OpenAI API returned status ${response.status}: ${response.statusText}`,
+                  );
+                }
+
+                const responseData = await response.json();
+
+                // Extract the response content
+                const llmResponse =
+                  responseData.choices?.[0]?.message?.content ||
+                  "No response received";
+
+                // Add the LLM response to the output
+                addOutputMessage(llmResponse, "assistant");
+
+                // Continue waiting for more user input (conversational loop)
+                setWaitingForUserInput(true);
+
+                console.log(`LLM call completed successfully`);
+              } catch (error) {
+                console.error(`LLM call failed: ${error}`);
+                addOutputMessage(`LLM call failed: ${error}`, "assistant");
+                // Continue waiting for user input even after error
+                setWaitingForUserInput(true);
+              }
+            };
+
+            // Store the conversation handler for use with submitUserInput
+            (window as any).currentLLMHandler = handleConversation;
+
           } catch (error) {
-            console.error(`LLM call failed: ${error}`);
-            addOutputMessage(`LLM call failed: ${error}`, "assistant");
+            console.error(`LLM initialization failed: ${error}`);
+            addOutputMessage(`LLM initialization failed: ${error}`, "assistant");
           }
           break;
         }
