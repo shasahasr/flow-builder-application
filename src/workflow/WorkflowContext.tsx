@@ -26,7 +26,12 @@ interface WorkflowContextType {
   workflowOutput: string[];
   isExecuting: boolean;
   waitingForUserInput: boolean;
-  executeWorkflow: (nodes: AppNode[], edges: Edge[]) => Promise<void>;
+  executeWorkflow: (
+    nodes: AppNode[],
+    edges: Edge[],
+    onPreviewOpen?: () => void
+  ) => Promise<void>;
+  stopWorkflow: () => void;
   saveWorkflow: (name: string, nodes: AppNode[], edges: Edge[]) => void;
   loadWorkflow: (name: string) => { nodes: AppNode[]; edges: Edge[] } | null;
   deleteWorkflow: (name: string) => boolean;
@@ -43,6 +48,7 @@ export const WorkflowContext = createContext<WorkflowContextType>({
   isExecuting: false,
   waitingForUserInput: false,
   executeWorkflow: async () => {},
+  stopWorkflow: () => {},
   saveWorkflow: () => {},
   loadWorkflow: () => null,
   deleteWorkflow: () => false,
@@ -65,12 +71,14 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
   const { userId } = useAuth();
   const currentUserId = getUserIdOrDefault(userId);
   const [workflowState, setWorkflowState] = useState<Record<string, unknown>>(
-    {},
+    {}
   );
   const [workflowOutput, setWorkflowOutput] = useState<string[]>([]);
   const [isExecuting, setIsExecuting] = useState(false);
   const [waitingForUserInput, setWaitingForUserInput] = useState(false);
   const [savedWorkflows, setSavedWorkflows] = useState<string[]>([]);
+  const [abortController, setAbortController] =
+    useState<AbortController | null>(null);
 
   // Load saved workflows when user changes
   useEffect(() => {
@@ -109,7 +117,7 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
   // Clear output messages
   const clearOutput = useCallback(() => {
     setWorkflowOutput([]);
-    // Clear any active LLM conversation handler
+    // Clear any active LLM conversation handler and reset conversation
     (window as any).currentLLMHandler = null;
     setWaitingForUserInput(false);
   }, []);
@@ -139,7 +147,7 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
       // Always save to localStorage in this simplified version
       saveToLocalStorage(name, nodes, edges);
     },
-    [currentUserId],
+    [currentUserId]
   );
 
   // Helper function to save to localStorage
@@ -166,7 +174,7 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
       // Update state
       setSavedWorkflows(Object.keys(savedData));
     },
-    [],
+    []
   );
 
   // Helper function to load from localStorage
@@ -199,7 +207,7 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
       // Always load from localStorage in this simplified version
       return loadFromLocalStorage(name);
     },
-    [currentUserId, loadFromLocalStorage],
+    [currentUserId, loadFromLocalStorage]
   );
 
   // Helper function to process a message with variable replacements
@@ -208,7 +216,7 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
       // Replace variables in the format ${variableName} with their values from context
       return WorkflowUtils.evaluateExpression(message, contextData);
     },
-    [],
+    []
   );
 
   // Function to add a message to the workflow output formatted for the chat UI
@@ -221,7 +229,7 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
       };
       setWorkflowOutput((prev) => [...prev, JSON.stringify(messageObj)]);
     },
-    [],
+    []
   );
 
   // Function to wait for user input (will be connected to the chat UI)
@@ -239,7 +247,7 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
         userInputResolveRef.current = resolve;
       });
     },
-    [addOutputMessage],
+    [addOutputMessage]
   );
 
   // Helper function to execute a single node
@@ -248,7 +256,7 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
       nodeId: string,
       nodeMap: Record<string, AppNode>,
       nodeOutgoingEdges: Record<string, Edge[]>,
-      contextData: Record<string, unknown>,
+      contextData: Record<string, unknown>
     ): Promise<Record<string, unknown>> => {
       const node = nodeMap[nodeId];
       if (!node) return contextData;
@@ -299,7 +307,7 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
 
             // Don't show variable saving notifications to keep chat clean
             console.log(
-              `Input saved as variable: ${variableName} = "${userInput}"`,
+              `Input saved as variable: ${variableName} = "${userInput}"`
             );
           }
           break;
@@ -406,8 +414,8 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
                     `Adding request body: ${JSON.stringify(
                       payloadObj,
                       null,
-                      2,
-                    )}`,
+                      2
+                    )}`
                   );
                 }
               }
@@ -420,7 +428,7 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
               // Check if response is ok
               if (!response.ok) {
                 throw new Error(
-                  `API returned status ${response.status}: ${response.statusText}`,
+                  `API returned status ${response.status}: ${response.statusText}`
                 );
               }
 
@@ -428,7 +436,7 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
               responseData = await response.json();
 
               console.log(
-                `Received response from API. Status: ${response.status}`,
+                `Received response from API. Status: ${response.status}`
               );
             } catch (error) {
               // If the API call fails, just show a failure message
@@ -492,76 +500,135 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
         case "llm_node": {
           try {
             // Get LLM details from node data
-            let ai = "chatgpt";
             let apiKey = "";
             let model = "gpt-3.5-turbo";
             let instructions = "";
             let tools: any[] = [];
 
             if (node.data && typeof node.data === "object") {
-              if ("ai" in node.data) ai = node.data.ai as string;
               if ("apiKey" in node.data) apiKey = node.data.apiKey as string;
               if ("model" in node.data) model = node.data.model as string;
-              if ("instructions" in node.data) instructions = node.data.instructions as string;
+              if ("instructions" in node.data)
+                instructions = node.data.instructions as string;
               if ("tools" in node.data) tools = node.data.tools as any[];
             }
 
             if (!apiKey) {
               addOutputMessage(
                 "API key is required for LLM calls",
-                "assistant",
+                "assistant"
               );
               break;
             }
 
             if (!instructions.trim()) {
-              addOutputMessage("Agent instructions are required to start the conversation", "assistant");
+              addOutputMessage(
+                "Agent instructions are required to start the conversation",
+                "assistant"
+              );
               break;
             }
 
-            // Generate a natural introduction based on the instructions
-            let naturalIntro = "";
-            if (instructions.toLowerCase().includes("sales assistant")) {
-              naturalIntro = "Hello! I'm your AI sales assistant, here to help you with product inquiries and support your sales needs.";
-            } else if (instructions.toLowerCase().includes("customer service")) {
-              naturalIntro = "Hi there! I'm your AI customer service representative, ready to assist you with any questions or concerns.";
-            } else if (instructions.toLowerCase().includes("support")) {
-              naturalIntro = "Welcome! I'm your AI support agent, here to help you resolve any issues and answer your questions.";
-            } else if (instructions.toLowerCase().includes("assistant")) {
-              naturalIntro = "Hello! I'm your AI assistant, ready to help you with whatever you need.";
-            } else {
-              // Fallback for custom instructions - make it sound natural
-              naturalIntro = `Hello! I'm an AI agent specialized in helping you. ${instructions.charAt(0).toLowerCase() + instructions.slice(1)}`;
+            // Initialize conversation history for this session
+            let conversationHistory: Array<{ role: string; content: string }> =
+              [
+                {
+                  role: "system",
+                  content: `${instructions}${
+                    tools.length > 0
+                      ? `\n\nYou have access to these tools:\n${tools
+                          .map(
+                            (tool) =>
+                              `- ${tool.name}: ${tool.description} (${tool.method} ${tool.url})`
+                          )
+                          .join(
+                            "\n"
+                          )}\n\nWhen you need to use a tool to answer a user's question, respond with: TOOL_REQUEST: [exact_tool_name]\nAfter I provide the tool data, give a natural, helpful response based on that information.`
+                      : ""
+                  }`,
+                },
+              ];
+
+            // Let the AI introduce itself naturally based on its instructions and tools
+            try {
+              // Ask the AI to introduce itself
+              const introPrompt = {
+                role: "user",
+                content:
+                  "Please introduce yourself briefly. Explain what you do and what you can help with based on your role and available tools. Keep it friendly and concise.",
+              };
+
+              conversationHistory.push(introPrompt);
+
+              const response = await fetch(
+                "https://api.openai.com/v1/chat/completions",
+                {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${apiKey}`,
+                  },
+                  body: JSON.stringify({
+                    model: model,
+                    messages: conversationHistory,
+                    max_tokens: 150,
+                    temperature: 0.7,
+                  }),
+                  signal: abortController?.signal,
+                }
+              );
+
+              if (response.ok) {
+                const responseData = await response.json();
+                const aiIntroduction =
+                  responseData.choices?.[0]?.message?.content ||
+                  "Hello! I'm your AI assistant. What can I help you with today?";
+
+                // Add the AI's introduction to conversation history
+                conversationHistory.push({
+                  role: "assistant",
+                  content: aiIntroduction,
+                });
+
+                // Display the introduction to user
+                addOutputMessage(`🤖 ${aiIntroduction}`, "assistant");
+              } else {
+                // Fallback if API call fails
+                const fallbackMessage =
+                  "Hello! I'm your AI assistant. What can I help you with today?";
+                conversationHistory.push({
+                  role: "assistant",
+                  content: fallbackMessage,
+                });
+                addOutputMessage(`🤖 ${fallbackMessage}`, "assistant");
+              }
+            } catch (error) {
+              // Fallback if there's an error
+              const fallbackMessage =
+                "Hello! I'm your AI assistant. What can I help you with today?";
+              conversationHistory.push({
+                role: "assistant",
+                content: fallbackMessage,
+              });
+              addOutputMessage(`🤖 ${fallbackMessage}`, "assistant");
             }
-
-            const introMessage = `🤖 ${naturalIntro}
-
-${tools.length > 0 ? `I have access to ${tools.length} specialized tool(s) to provide you with comprehensive assistance.` : ''}
-
-What can I help you with today?`;
-            
-            addOutputMessage(introMessage, "assistant");
 
             // Set up conversational loop - wait for user input
             setWaitingForUserInput(true);
-            
+
             // Set up the conversation handler for this LLM node
             const handleConversation = async (userMessage: string) => {
               try {
-                console.log(`Making LLM call to ${ai} with model ${model}...`);
+                console.log(`Processing user message: ${userMessage}`);
 
-                // Build system prompt with tools context
-                let systemPrompt = instructions;
-                if (tools.length > 0) {
-                  const toolDescriptions = tools.map(tool => 
-                    `Tool: ${tool.name} - ${tool.description} (${tool.method} ${tool.url})`
-                  ).join('\n');
-                  
-                  systemPrompt += `\n\nAVAILABLE TOOLS:\n${toolDescriptions}\n\nWhen you need to use a tool, mention it in your response and I'll help execute it.`;
-                }
+                // Add user message to conversation history
+                conversationHistory.push({
+                  role: "user",
+                  content: userMessage,
+                });
 
-                // Make OpenAI API call
-                const response = await fetch(
+                // Make LLM call with full conversation history
+                let response = await fetch(
                   "https://api.openai.com/v1/chat/completions",
                   {
                     method: "POST",
@@ -571,45 +638,192 @@ What can I help you with today?`;
                     },
                     body: JSON.stringify({
                       model: model,
-                      messages: [
-                        {
-                          role: "system",
-                          content: systemPrompt,
-                        },
-                        {
-                          role: "user",
-                          content: userMessage,
-                        },
-                      ],
-                      max_tokens: 1000,
+                      messages: conversationHistory,
+                      max_tokens: 1500,
                       temperature: 0.7,
                     }),
-                  },
+                    signal: abortController?.signal,
+                  }
                 );
 
                 if (!response.ok) {
                   throw new Error(
-                    `OpenAI API returned status ${response.status}: ${response.statusText}`,
+                    `OpenAI API returned status ${response.status}: ${response.statusText}`
                   );
                 }
 
-                const responseData = await response.json();
-
-                // Extract the response content
-                const llmResponse =
+                let responseData = await response.json();
+                let llmResponse =
                   responseData.choices?.[0]?.message?.content ||
-                  "No response received";
+                  "I'm not sure how to respond to that.";
 
-                // Add the LLM response to the output
-                addOutputMessage(llmResponse, "assistant");
+                // Add LLM response to conversation history
+                conversationHistory.push({
+                  role: "assistant",
+                  content: llmResponse,
+                });
+
+                // Check if the LLM wants to use a tool
+                const toolRequestMatch = llmResponse.match(
+                  /TOOL_REQUEST:\s*(.+?)(?:\n|$)/i
+                );
+
+                if (toolRequestMatch && tools.length > 0) {
+                  const requestedToolName = toolRequestMatch[1].trim();
+
+                  // Smart tool matching - find the best matching tool
+                  const matchedTool = tools.find(
+                    (tool) =>
+                      tool.name.toLowerCase() ===
+                        requestedToolName.toLowerCase() ||
+                      tool.name
+                        .toLowerCase()
+                        .includes(requestedToolName.toLowerCase()) ||
+                      requestedToolName
+                        .toLowerCase()
+                        .includes(tool.name.toLowerCase())
+                  );
+
+                  if (matchedTool) {
+                    try {
+                      // Don't show the technical TOOL_REQUEST message to user
+                      // Instead, show a natural response indicating we're looking into it
+                      const naturalResponse = llmResponse
+                        .replace(/TOOL_REQUEST:\s*(.+?)(?:\n|$)/i, "")
+                        .trim();
+                      if (naturalResponse) {
+                        addOutputMessage(naturalResponse, "assistant");
+                      }
+
+                      // Execute the tool silently in the background
+                      const toolHeaders = matchedTool.headers
+                        ? JSON.parse(matchedTool.headers)
+                        : { "Content-Type": "application/json" };
+                      const toolResponse = await fetch(matchedTool.url, {
+                        method: matchedTool.method,
+                        headers: toolHeaders,
+                        body:
+                          matchedTool.method !== "GET" && matchedTool.payload
+                            ? matchedTool.payload
+                            : undefined,
+                      });
+
+                      if (!toolResponse.ok) {
+                        throw new Error(
+                          `Tool API returned status ${toolResponse.status}`
+                        );
+                      }
+
+                      const toolData = await toolResponse.json();
+                      console.log(
+                        `Tool ${matchedTool.name} returned:`,
+                        toolData
+                      );
+
+                      // Add tool result to conversation history and get AI's analysis
+                      conversationHistory.push({
+                        role: "user",
+                        content: `Tool result from ${
+                          matchedTool.name
+                        }: ${JSON.stringify(
+                          toolData,
+                          null,
+                          2
+                        )}\n\nNow please provide a helpful, natural response based on this data. Don't mention the API call or technical details.`,
+                      });
+
+                      // Get AI's analysis of the tool result
+                      const analysisResponse = await fetch(
+                        "https://api.openai.com/v1/chat/completions",
+                        {
+                          method: "POST",
+                          headers: {
+                            "Content-Type": "application/json",
+                            Authorization: `Bearer ${apiKey}`,
+                          },
+                          body: JSON.stringify({
+                            model: model,
+                            messages: conversationHistory,
+                            max_tokens: 1500,
+                            temperature: 0.7,
+                          }),
+                          signal: abortController?.signal,
+                        }
+                      );
+
+                      if (analysisResponse.ok) {
+                        const analysisData = await analysisResponse.json();
+                        const finalResponse =
+                          analysisData.choices?.[0]?.message?.content ||
+                          "I found some information for you.";
+
+                        // Add final response to conversation history
+                        conversationHistory.push({
+                          role: "assistant",
+                          content: finalResponse,
+                        });
+
+                        addOutputMessage(finalResponse, "assistant");
+                      } else {
+                        addOutputMessage(
+                          `Here's what I found: ${JSON.stringify(
+                            toolData,
+                            null,
+                            2
+                          )}`,
+                          "assistant"
+                        );
+                      }
+                    } catch (toolError) {
+                      console.error(`Tool execution failed: ${toolError}`);
+                      const errorMsg = `I'm having trouble finding that information right now. Please try again later.`;
+                      addOutputMessage(errorMsg, "assistant");
+
+                      // Add error to conversation history
+                      conversationHistory.push({
+                        role: "assistant",
+                        content: errorMsg,
+                      });
+                    }
+                  } else {
+                    // Tool not found - just show the original response without TOOL_REQUEST
+                    const cleanResponse = llmResponse
+                      .replace(/TOOL_REQUEST:\s*(.+?)(?:\n|$)/i, "")
+                      .trim();
+                    addOutputMessage(
+                      cleanResponse || "I'm not sure how to help with that.",
+                      "assistant"
+                    );
+                  }
+                } else {
+                  // No tool request - just show the response
+                  addOutputMessage(llmResponse, "assistant");
+                }
 
                 // Continue waiting for more user input (conversational loop)
                 setWaitingForUserInput(true);
 
-                console.log(`LLM call completed successfully`);
+                console.log(
+                  `Conversation turn completed. History length: ${conversationHistory.length}`
+                );
               } catch (error) {
-                console.error(`LLM call failed: ${error}`);
-                addOutputMessage(`LLM call failed: ${error}`, "assistant");
+                console.error(`LLM conversation failed: ${error}`);
+
+                // Don't show error messages for user-initiated abort
+                if (error instanceof Error && error.name === "AbortError") {
+                  return;
+                }
+
+                const errorMsg =
+                  "I'm experiencing some technical difficulties. Please try again.";
+                addOutputMessage(errorMsg, "assistant");
+
+                // Add error to conversation history
+                conversationHistory.push({
+                  role: "assistant",
+                  content: errorMsg,
+                });
+
                 // Continue waiting for user input even after error
                 setWaitingForUserInput(true);
               }
@@ -617,10 +831,12 @@ What can I help you with today?`;
 
             // Store the conversation handler for use with submitUserInput
             (window as any).currentLLMHandler = handleConversation;
-
           } catch (error) {
             console.error(`LLM initialization failed: ${error}`);
-            addOutputMessage(`LLM initialization failed: ${error}`, "assistant");
+            addOutputMessage(
+              `LLM initialization failed: ${error}`,
+              "assistant"
+            );
           }
           break;
         }
@@ -645,7 +861,7 @@ What can I help you with today?`;
           try {
             // First check for common comparison patterns - match longer operators first
             const comparison = conditionText.match(
-              /(.*?)(>=|<=|==|!=|>|<)(.*)/,
+              /(.*?)(>=|<=|==|!=|>|<)(.*)/
             );
 
             if (comparison) {
@@ -715,8 +931,8 @@ What can I help you with today?`;
                       with (context) {
                         return (${conditionText});
                       }
-                    `,
-                    )(contextData),
+                    `
+                    )(contextData)
                   );
                 } catch {
                   conditionResult = false;
@@ -732,7 +948,7 @@ What can I help you with today?`;
 
           // We can optionally show condition evaluation info in developer mode
           console.log(
-            `Condition '${conditionName}' evaluated: ${debugInfo} = ${conditionResult}`,
+            `Condition '${conditionName}' evaluated: ${debugInfo} = ${conditionResult}`
           );
 
           // Only follow edges with matching condition result
@@ -753,7 +969,7 @@ What can I help you with today?`;
               edge.target,
               nodeMap,
               nodeOutgoingEdges,
-              nextContextData,
+              nextContextData
             );
           }
 
@@ -769,27 +985,49 @@ What can I help you with today?`;
           edge.target,
           nodeMap,
           nodeOutgoingEdges,
-          nextContextData,
+          nextContextData
         );
       }
 
       return nextContextData;
     },
-    [addOutputMessage, processMessage, waitForUserInput],
+    [addOutputMessage, processMessage, waitForUserInput]
   );
+
+  // Stop workflow execution
+  const stopWorkflow = useCallback(() => {
+    if (abortController) {
+      abortController.abort();
+      setAbortController(null);
+    }
+    setIsExecuting(false);
+    setWaitingForUserInput(false);
+    // Clear any active LLM conversation handler
+    (window as any).currentLLMHandler = null;
+    setWorkflowOutput((prev) => [...prev, "🛑 Workflow stopped by user"]);
+  }, [abortController]);
 
   // Execute workflow
   const executeWorkflow = useCallback(
-    async (nodes: AppNode[], edges: Edge[]) => {
+    async (nodes: AppNode[], edges: Edge[], onPreviewOpen?: () => void) => {
       // Reset state
       setWorkflowState({});
       setWorkflowOutput([]);
       setIsExecuting(true);
 
+      // Create abort controller for this execution
+      const controller = new AbortController();
+      setAbortController(controller);
+
+      // Open AI Agent Preview if callback is provided
+      if (onPreviewOpen) {
+        onPreviewOpen();
+      }
+
       try {
         // Find starting nodes (nodes with no incoming edges)
         const nodesWithIncomingEdges = new Set(
-          edges.map((edge) => edge.target),
+          edges.map((edge) => edge.target)
         );
         const startingNodeIds = nodes
           .filter((node) => !nodesWithIncomingEdges.has(node.id))
@@ -815,10 +1053,15 @@ What can I help you with today?`;
           await executeNode(nodeId, nodeMap, nodeOutgoingEdges, {});
         }
       } finally {
-        setIsExecuting(false);
+        // Only set isExecuting to false if there's no active LLM conversation handler
+        // This keeps the workflow "running" for conversational agents
+        if (!(window as any).currentLLMHandler) {
+          setIsExecuting(false);
+        }
+        setAbortController(null);
       }
     },
-    [executeNode],
+    [executeNode]
   );
 
   // Helper function to delete from localStorage
@@ -854,7 +1097,7 @@ What can I help you with today?`;
       // Always delete from localStorage in this simplified version
       return deleteFromLocalStorage(name);
     },
-    [currentUserId, deleteFromLocalStorage],
+    [currentUserId, deleteFromLocalStorage]
   );
 
   // Update workflow name
@@ -888,7 +1131,7 @@ What can I help you with today?`;
         return false;
       }
     },
-    [],
+    []
   );
 
   const contextValue: WorkflowContextType = {
@@ -897,6 +1140,7 @@ What can I help you with today?`;
     isExecuting,
     waitingForUserInput,
     executeWorkflow,
+    stopWorkflow,
     saveWorkflow,
     loadWorkflow,
     deleteWorkflow,

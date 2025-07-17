@@ -46,7 +46,7 @@ export function FlowApp() {
       // For AI agent workflow nodes, just add the connection
       // Data flow will be managed at runtime when executing the workflow
     },
-    [setEdges],
+    [setEdges]
   );
 
   const onDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
@@ -107,7 +107,7 @@ export function FlowApp() {
 
       setNodes((nds) => nds.concat(newNode));
     },
-    [screenToFlowPosition, setNodes],
+    [screenToFlowPosition, setNodes]
   );
 
   return (
@@ -171,7 +171,9 @@ export function FlowApp() {
                 <Background color="#aaa" gap={16} size={1} />
                 <MiniMap />
                 <Controls />
-                <WorkflowControls />
+                <WorkflowControls
+                  onOpenPreview={() => setIsPreviewOpen(true)}
+                />
               </ReactFlow>
             </div>
           </div>

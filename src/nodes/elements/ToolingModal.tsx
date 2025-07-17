@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import "./ToolingModal.css";
 
 interface ApiTool {
@@ -15,14 +15,18 @@ interface ToolingModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAddTool: (tool: ApiTool) => void;
+  onUpdateTool?: (tool: ApiTool) => void;
   existingTools: ApiTool[];
+  editingTool?: ApiTool | null;
 }
 
 const ToolingModal: React.FC<ToolingModalProps> = ({
   isOpen,
   onClose,
   onAddTool,
+  onUpdateTool,
   existingTools: _, // Mark as unused for now, could be used for validation later
+  editingTool,
 }) => {
   const [selectedToolType, setSelectedToolType] = useState<string>("");
   const [toolName, setToolName] = useState("");
@@ -34,6 +38,19 @@ const ToolingModal: React.FC<ToolingModalProps> = ({
   const [payload, setPayload] = useState('{\n  "key": "value"\n}');
   const [description, setDescription] = useState("");
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+
+  // Populate form when editing a tool
+  useEffect(() => {
+    if (editingTool) {
+      setSelectedToolType("api");
+      setToolName(editingTool.name);
+      setUrl(editingTool.url);
+      setMethod(editingTool.method);
+      setHeaders(editingTool.headers);
+      setPayload(editingTool.payload);
+      setDescription(editingTool.description);
+    }
+  }, [editingTool]);
 
   const validateJSON = (jsonString: string): boolean => {
     try {
@@ -76,8 +93,8 @@ const ToolingModal: React.FC<ToolingModalProps> = ({
       return;
     }
 
-    const newTool: ApiTool = {
-      id: `tool_${Date.now()}`,
+    const toolData: ApiTool = {
+      id: editingTool ? editingTool.id : `tool_${Date.now()}`,
       name: toolName,
       url,
       method,
@@ -86,7 +103,12 @@ const ToolingModal: React.FC<ToolingModalProps> = ({
       description,
     };
 
-    onAddTool(newTool);
+    if (editingTool && onUpdateTool) {
+      onUpdateTool(toolData);
+    } else {
+      onAddTool(toolData);
+    }
+
     resetForm();
     onClose();
   };
@@ -113,7 +135,7 @@ const ToolingModal: React.FC<ToolingModalProps> = ({
     <div className="tooling-modal-overlay" onClick={handleClose}>
       <div className="tooling-modal" onClick={(e) => e.stopPropagation()}>
         <div className="tooling-modal-header">
-          <h3>Add Tool to LLM</h3>
+          <h3>{editingTool ? "Edit Tool" : "Add Tool to LLM"}</h3>
           <button className="close-button" onClick={handleClose}>
             ×
           </button>
@@ -239,7 +261,7 @@ const ToolingModal: React.FC<ToolingModalProps> = ({
                   Cancel
                 </button>
                 <button className="add-button" onClick={handleAddTool}>
-                  Add Tool
+                  {editingTool ? "Update Tool" : "Add Tool"}
                 </button>
               </div>
             </div>

@@ -52,6 +52,7 @@ const LLMNode = ({ data, isConnectable, id }: NodeProps) => {
     Array.isArray(data.tools) ? data.tools : []
   );
   const [isToolingModalOpen, setIsToolingModalOpen] = useState(false);
+  const [editingTool, setEditingTool] = useState<ApiTool | null>(null);
 
   const { setNodes } = useReactFlow();
 
@@ -87,10 +88,29 @@ const LLMNode = ({ data, isConnectable, id }: NodeProps) => {
     updateNodeData("tools", updatedTools);
   };
 
+  const handleUpdateTool = (updatedTool: ApiTool) => {
+    const updatedTools = tools.map((tool) =>
+      tool.id === updatedTool.id ? updatedTool : tool
+    );
+    setTools(updatedTools);
+    updateNodeData("tools", updatedTools);
+    setEditingTool(null);
+  };
+
+  const handleEditTool = (tool: ApiTool) => {
+    setEditingTool(tool);
+    setIsToolingModalOpen(true);
+  };
+
   const handleRemoveTool = (toolId: string) => {
     const updatedTools = tools.filter((tool) => tool.id !== toolId);
     setTools(updatedTools);
     updateNodeData("tools", updatedTools);
+  };
+
+  const handleCloseModal = () => {
+    setIsToolingModalOpen(false);
+    setEditingTool(null);
   };
 
   const modelOptions = ["gpt-3.5-turbo", "gpt-4", "text-davinci-003", "gpt-4o"];
@@ -174,7 +194,7 @@ const LLMNode = ({ data, isConnectable, id }: NodeProps) => {
               updateNodeData("instructions", e.target.value);
             }}
             style={nodeStyles.textarea}
-            placeholder="Define what this AI agent should do. E.g., 'You are a sales assistant that helps customers with product inquiries and can access our inventory system.'"
+            placeholder="Define what this AI agent should do."
           />
         </label>
       </div>
@@ -260,27 +280,48 @@ const LLMNode = ({ data, isConnectable, id }: NodeProps) => {
                       : tool.url}
                   </div>
                 </div>
-                <button
-                  onClick={() => handleRemoveTool(tool.id)}
-                  style={{
-                    background: "#ef4444",
-                    border: "none",
-                    color: "white",
-                    padding: "2px 6px",
-                    borderRadius: "3px",
-                    fontSize: "10px",
-                    cursor: "pointer",
-                    marginLeft: "8px",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = "#dc2626";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = "#ef4444";
-                  }}
-                >
-                  ×
-                </button>
+                <div style={{ display: "flex", gap: "4px" }}>
+                  <button
+                    onClick={() => handleEditTool(tool)}
+                    style={{
+                      background: "#3b82f6",
+                      border: "none",
+                      color: "white",
+                      padding: "2px 6px",
+                      borderRadius: "3px",
+                      fontSize: "10px",
+                      cursor: "pointer",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = "#2563eb";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = "#3b82f6";
+                    }}
+                  >
+                    ✎
+                  </button>
+                  <button
+                    onClick={() => handleRemoveTool(tool.id)}
+                    style={{
+                      background: "#ef4444",
+                      border: "none",
+                      color: "white",
+                      padding: "2px 6px",
+                      borderRadius: "3px",
+                      fontSize: "10px",
+                      cursor: "pointer",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = "#dc2626";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = "#ef4444";
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -290,9 +331,11 @@ const LLMNode = ({ data, isConnectable, id }: NodeProps) => {
       {/* Tooling Modal */}
       <ToolingModal
         isOpen={isToolingModalOpen}
-        onClose={() => setIsToolingModalOpen(false)}
+        onClose={handleCloseModal}
         onAddTool={handleAddTool}
+        onUpdateTool={handleUpdateTool}
         existingTools={tools}
+        editingTool={editingTool}
       />
 
       <Handle

@@ -4,6 +4,7 @@ import { useWorkflow } from "./WorkflowContext";
 import { AppNode } from "../nodes/types";
 import {
   FiPlay,
+  FiSquare,
   FiSave,
   FiFolder,
   FiEdit3,
@@ -13,13 +14,20 @@ import {
   FiCheck,
 } from "react-icons/fi";
 
-const WorkflowControls: React.FC = () => {
+interface WorkflowControlsProps {
+  onOpenPreview?: () => void;
+}
+
+const WorkflowControls: React.FC<WorkflowControlsProps> = ({
+  onOpenPreview,
+}) => {
   const [workflowName, setWorkflowName] = useState("");
   const [selectedWorkflow, setSelectedWorkflow] = useState("");
   const [isEditMode, setIsEditMode] = useState(false);
   const { getNodes, getEdges, setNodes, setEdges } = useReactFlow();
   const {
     executeWorkflow,
+    stopWorkflow,
     saveWorkflow,
     loadWorkflow,
     deleteWorkflow,
@@ -61,7 +69,7 @@ const WorkflowControls: React.FC = () => {
   const handleExecute = () => {
     const nodes = getNodes() as unknown as AppNode[];
     const edges = getEdges();
-    executeWorkflow(nodes, edges);
+    executeWorkflow(nodes, edges, onOpenPreview);
   };
 
   // Handle save workflow button click
@@ -87,7 +95,7 @@ const WorkflowControls: React.FC = () => {
     // Check if we're currently in edit mode
     if (isEditMode) {
       const confirmExit = window.confirm(
-        "You are currently editing a workflow. Loading a new workflow will discard your changes. Continue?",
+        "You are currently editing a workflow. Loading a new workflow will discard your changes. Continue?"
       );
       if (!confirmExit) {
         return;
@@ -113,7 +121,7 @@ const WorkflowControls: React.FC = () => {
     // Prompt for a new name
     const newName = prompt(
       "Enter a new name for this workflow:",
-      selectedWorkflow,
+      selectedWorkflow
     );
 
     if (newName && newName.trim() !== "" && newName !== selectedWorkflow) {
@@ -122,7 +130,7 @@ const WorkflowControls: React.FC = () => {
         setSelectedWorkflow(newName);
       } else {
         alert(
-          "Failed to rename workflow. A workflow with this name may already exist.",
+          "Failed to rename workflow. A workflow with this name may already exist."
         );
       }
     }
@@ -144,7 +152,7 @@ const WorkflowControls: React.FC = () => {
 
       // Show a notification
       alert(
-        `Editing workflow: "${selectedWorkflow}". Make your changes and click "Save Changes" when done.`,
+        `Editing workflow: "${selectedWorkflow}". Make your changes and click "Save Changes" when done.`
       );
     }
   };
@@ -175,7 +183,7 @@ const WorkflowControls: React.FC = () => {
 
     if (
       window.confirm(
-        `Are you sure you want to delete the workflow "${selectedWorkflow}"?`,
+        `Are you sure you want to delete the workflow "${selectedWorkflow}"?`
       )
     ) {
       const success = deleteWorkflow(selectedWorkflow);
@@ -225,31 +233,52 @@ const WorkflowControls: React.FC = () => {
         </div>
       )}
 
-      {/* Execute workflow button */}
-      <button
-        onClick={handleExecute}
-        disabled={isExecuting}
-        style={{
-          padding: "10px 16px",
-          background: isExecuting
-            ? "linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%)"
-            : "linear-gradient(135deg, #2ecc71 0%, #27ae60 100%)",
-          color: "white",
-          border: "none",
-          borderRadius: "10px",
-          cursor: isExecuting ? "not-allowed" : "pointer",
-          fontWeight: "600",
-          fontSize: "14px",
-          display: "flex",
-          alignItems: "center",
-          gap: "8px",
-          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
-          transition: "all 0.2s ease",
-        }}
-      >
-        <FiPlay />
-        {isExecuting ? "Running..." : "Run Workflow"}
-      </button>
+      {/* Execute/Stop workflow button */}
+      {!isExecuting ? (
+        <button
+          onClick={handleExecute}
+          style={{
+            padding: "10px 16px",
+            background: "linear-gradient(135deg, #2ecc71 0%, #27ae60 100%)",
+            color: "white",
+            border: "none",
+            borderRadius: "10px",
+            cursor: "pointer",
+            fontWeight: "600",
+            fontSize: "14px",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+            transition: "all 0.2s ease",
+          }}
+        >
+          <FiPlay />
+          Run Workflow
+        </button>
+      ) : (
+        <button
+          onClick={stopWorkflow}
+          style={{
+            padding: "10px 16px",
+            background: "linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)",
+            color: "white",
+            border: "none",
+            borderRadius: "10px",
+            cursor: "pointer",
+            fontWeight: "600",
+            fontSize: "14px",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+            transition: "all 0.2s ease",
+          }}
+        >
+          <FiSquare />
+          Stop Workflow
+        </button>
+      )}
 
       {/* Save Changes button - visible only when editing */}
       {isEditMode && (
