@@ -2,6 +2,12 @@ import React, { useState, useEffect } from "react";
 import { useReactFlow } from "@xyflow/react";
 import { useWorkflow } from "./WorkflowContext";
 import { AppNode } from "../nodes/types";
+import { useWorkflowManager } from "../hooks/useWorkflowManager";
+import {
+  AlertModal,
+  ConfirmModal,
+  PromptModal,
+} from "../components/CustomModals";
 import {
   FiPlay,
   FiSquare,
@@ -24,25 +30,57 @@ const WorkflowControls: React.FC<WorkflowControlsProps> = ({
   const [workflowName, setWorkflowName] = useState("");
   const [selectedWorkflow, setSelectedWorkflow] = useState("");
   const [isEditMode, setIsEditMode] = useState(false);
+
+  // Modal states
+  const [alertModal, setAlertModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+  }>({
+    isOpen: false,
+    title: "",
+    message: "",
+  });
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    destructive?: boolean;
+  }>({
+    isOpen: false,
+    title: "",
+    message: "",
+    onConfirm: () => {},
+    destructive: false,
+  });
+  const [promptModal, setPromptModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    defaultValue: string;
+    onConfirm: (value: string) => void;
+  }>({
+    isOpen: false,
+    title: "",
+    message: "",
+    defaultValue: "",
+    onConfirm: () => {},
+  });
   const { getNodes, getEdges, setNodes, setEdges } = useReactFlow();
-  const {
-    executeWorkflow,
-    stopWorkflow,
-    saveWorkflow,
-    loadWorkflow,
-    deleteWorkflow,
-    updateWorkflowName,
-    savedWorkflows,
-    isExecuting,
-  } = useWorkflow();
+  const { executeWorkflow, stopWorkflow, isExecuting } = useWorkflow();
+
+  // Firebase workflow manager - this handles all workflow CRUD operations
+  const { workflows, saveWorkflow, loadWorkflowById, deleteWorkflow } =
+    useWorkflowManager();
 
   // Load the saved workflow list on mount
   useEffect(() => {
-    // If there are saved workflows and the canvas is empty, suggest loading one
-    if (savedWorkflows.length > 0 && getNodes().length === 0) {
-      setSelectedWorkflow(savedWorkflows[0]);
+    // If there are workflows and the canvas is empty, suggest loading one
+    if (workflows.length > 0 && getNodes().length === 0) {
+      setSelectedWorkflow(workflows[0].name);
     }
-  }, [savedWorkflows, getNodes]);
+  }, [workflows, getNodes]);
 
   // Add CSS for animations
   useEffect(() => {
@@ -65,6 +103,29 @@ const WorkflowControls: React.FC<WorkflowControlsProps> = ({
     };
   }, []);
 
+  // Helper functions for showing modals
+  const showAlert = (title: string, message: string) => {
+    setAlertModal({ isOpen: true, title, message });
+  };
+
+  const showConfirm = (
+    title: string,
+    message: string,
+    onConfirm: () => void,
+    destructive = false
+  ) => {
+    setConfirmModal({ isOpen: true, title, message, onConfirm, destructive });
+  };
+
+  const showPrompt = (
+    title: string,
+    message: string,
+    defaultValue: string,
+    onConfirm: (value: string) => void
+  ) => {
+    setPromptModal({ isOpen: true, title, message, defaultValue, onConfirm });
+  };
+
   // Handle execute workflow button click
   const handleExecute = () => {
     const nodes = getNodes() as unknown as AppNode[];
@@ -73,126 +134,223 @@ const WorkflowControls: React.FC<WorkflowControlsProps> = ({
   };
 
   // Handle save workflow button click
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!workflowName.trim()) {
-      alert("Please enter a workflow name");
+      showAlert("Missing Workflow Name", "Please enter a workflow name");
       return;
     }
 
     const nodes = getNodes() as unknown as AppNode[];
     const edges = getEdges();
-    saveWorkflow(workflowName, nodes, edges);
-    setWorkflowName("");
+
+    if (nodes.length === 0) {
+      showAlert("Empty Workflow", "Cannot save empty workflow");
+      return;
+    }
+
+    try {
+      await saveWorkflow(workflowName, "Quick save workflow", nodes, edges, []);
+      setWorkflowName("");
+      showAlert("Success", `Workflow "${workflowName}" saved successfully!`);
+    } catch (error) {
+      console.error("Error saving workflow:", error);
+      showAlert("Error", "Failed to save workflow. Please try again.");
+    }
   };
 
   // Handle load workflow button click
-  const handleLoad = () => {
+  const handleLoad = async () => {
     if (!selectedWorkflow) {
-      alert("Please select a workflow to load");
+      showAlert("No Selection", "Please select a workflow to load");
       return;
     }
 
     // Check if we're currently in edit mode
     if (isEditMode) {
-      const confirmExit = window.confirm(
-        "You are currently editing a workflow. Loading a new workflow will discard your changes. Continue?"
+      showConfirm(
+        "Discard Changes",
+        "You are currently editing a workflow. Loading a new workflow will discard your changes. Continue?",
+        async () => {
+          setIsEditMode(false);
+          await loadSelectedWorkflow();
+        }
       );
-      if (!confirmExit) {
-        return;
-      }
-      // Exit edit mode if confirmed
-      setIsEditMode(false);
+      return;
     }
 
-    const workflow = loadWorkflow(selectedWorkflow);
-    if (workflow) {
-      setNodes(workflow.nodes);
-      setEdges(workflow.edges);
+    await loadSelectedWorkflow();
+  };
+
+  const loadSelectedWorkflow = async () => {
+    try {
+      // Find the selected workflow
+      const selectedWorkflowObj = workflows.find(
+        (w) => w.name === selectedWorkflow
+      );
+      if (selectedWorkflowObj) {
+        const workflow = await loadWorkflowById(selectedWorkflowObj.id);
+        if (workflow) {
+          setNodes(workflow.nodes);
+          setEdges(workflow.edges);
+        }
+      }
+    } catch (error) {
+      console.error("Error loading workflow:", error);
+      showAlert("Error", "Failed to load workflow. Please try again.");
     }
   };
 
-  // Handle workflow rename
-  const handleRename = () => {
+  // Handle workflow rename - Note: Firebase doesn't support direct rename, so we'll need to save with new name and delete old
+  const handleRename = async () => {
     if (!selectedWorkflow) {
-      alert("Please select a workflow to rename");
+      showAlert("No Selection", "Please select a workflow to rename");
       return;
     }
 
     // Prompt for a new name
-    const newName = prompt(
+    showPrompt(
+      "Rename Workflow",
       "Enter a new name for this workflow:",
-      selectedWorkflow
-    );
-
-    if (newName && newName.trim() !== "" && newName !== selectedWorkflow) {
-      const success = updateWorkflowName(selectedWorkflow, newName);
-      if (success) {
-        setSelectedWorkflow(newName);
-      } else {
-        alert(
-          "Failed to rename workflow. A workflow with this name may already exist."
-        );
+      selectedWorkflow,
+      async (newName: string) => {
+        if (newName !== selectedWorkflow) {
+          try {
+            // Find the original workflow
+            const selectedWorkflowObj = workflows.find(
+              (w) => w.name === selectedWorkflow
+            );
+            if (selectedWorkflowObj) {
+              const workflow = await loadWorkflowById(selectedWorkflowObj.id);
+              if (workflow) {
+                // Save with new name
+                await saveWorkflow(
+                  newName,
+                  workflow.description,
+                  workflow.nodes,
+                  workflow.edges,
+                  workflow.tags || []
+                );
+                // Delete the old workflow
+                await deleteWorkflow(selectedWorkflowObj.id);
+                setSelectedWorkflow(newName);
+                showAlert(
+                  "Success",
+                  `Workflow renamed to "${newName}" successfully!`
+                );
+              }
+            }
+          } catch (error) {
+            console.error("Error renaming workflow:", error);
+            showAlert("Error", "Failed to rename workflow. Please try again.");
+          }
+        }
       }
-    }
+    );
   };
 
   // Handle edit workflow
-  const handleEdit = () => {
+  const handleEdit = async () => {
     if (!selectedWorkflow) {
-      alert("Please select a workflow to edit");
+      showAlert("No Selection", "Please select a workflow to edit");
       return;
     }
 
-    // Load the workflow into the editor
-    const workflow = loadWorkflow(selectedWorkflow);
-    if (workflow) {
-      setNodes(workflow.nodes);
-      setEdges(workflow.edges);
-      setIsEditMode(true);
+    try {
+      // Find the selected workflow
+      const selectedWorkflowObj = workflows.find(
+        (w) => w.name === selectedWorkflow
+      );
+      if (selectedWorkflowObj) {
+        const workflow = await loadWorkflowById(selectedWorkflowObj.id);
+        if (workflow) {
+          setNodes(workflow.nodes);
+          setEdges(workflow.edges);
+          setIsEditMode(true);
 
-      // Show a notification
-      alert(
-        `Editing workflow: "${selectedWorkflow}". Make your changes and click "Save Changes" when done.`
+          // Show a notification
+          showAlert(
+            "Edit Mode",
+            `Editing workflow: "${selectedWorkflow}". Make your changes and click "Save Changes" when done.`
+          );
+        }
+      }
+    } catch (error) {
+      console.error("Error loading workflow for editing:", error);
+      showAlert(
+        "Error",
+        "Failed to load workflow for editing. Please try again."
       );
     }
   };
 
   // Handle save changes to workflow
-  const handleSaveChanges = () => {
+  const handleSaveChanges = async () => {
     if (!selectedWorkflow || !isEditMode) {
-      alert("No workflow is currently being edited");
+      showAlert("Error", "No workflow is currently being edited");
       return;
     }
 
-    // Get the current nodes and edges
-    const nodes = getNodes() as unknown as AppNode[];
-    const edges = getEdges();
+    try {
+      // Get the current nodes and edges
+      const nodes = getNodes() as unknown as AppNode[];
+      const edges = getEdges();
 
-    // Save the updated workflow
-    saveWorkflow(selectedWorkflow, nodes, edges);
-    setIsEditMode(false);
-    alert(`Changes to "${selectedWorkflow}" have been saved.`);
+      // Find the original workflow to get its description and tags
+      const selectedWorkflowObj = workflows.find(
+        (w) => w.name === selectedWorkflow
+      );
+      if (selectedWorkflowObj) {
+        // Update the workflow with same ID (this will overwrite it)
+        await saveWorkflow(
+          selectedWorkflow,
+          selectedWorkflowObj.description,
+          nodes,
+          edges,
+          selectedWorkflowObj.tags || []
+        );
+        setIsEditMode(false);
+        showAlert(
+          "Success",
+          `Changes to "${selectedWorkflow}" have been saved.`
+        );
+      }
+    } catch (error) {
+      console.error("Error saving workflow changes:", error);
+      showAlert("Error", "Failed to save changes. Please try again.");
+    }
   };
 
   // Handle workflow deletion
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!selectedWorkflow) {
-      alert("Please select a workflow to delete");
+      showAlert("No Selection", "Please select a workflow to delete");
       return;
     }
 
-    if (
-      window.confirm(
-        `Are you sure you want to delete the workflow "${selectedWorkflow}"?`
-      )
-    ) {
-      const success = deleteWorkflow(selectedWorkflow);
-      if (success) {
-        setSelectedWorkflow("");
-      } else {
-        alert("Failed to delete workflow");
-      }
-    }
+    showConfirm(
+      "Delete Workflow",
+      `Are you sure you want to delete the workflow "${selectedWorkflow}"? This action cannot be undone.`,
+      async () => {
+        try {
+          // Find the workflow to get its ID
+          const selectedWorkflowObj = workflows.find(
+            (w) => w.name === selectedWorkflow
+          );
+          if (selectedWorkflowObj) {
+            await deleteWorkflow(selectedWorkflowObj.id);
+            setSelectedWorkflow("");
+            showAlert(
+              "Success",
+              `Workflow "${selectedWorkflow}" deleted successfully!`
+            );
+          }
+        } catch (error) {
+          console.error("Error deleting workflow:", error);
+          showAlert("Error", "Failed to delete workflow. Please try again.");
+        }
+      },
+      true // destructive action
+    );
   };
 
   return (
@@ -306,17 +464,30 @@ const WorkflowControls: React.FC<WorkflowControlsProps> = ({
           </button>
           <button
             onClick={() => {
-              if (
-                window.confirm("Cancel editing? Your changes will be lost.")
-              ) {
-                // Reload the original workflow to discard changes
-                const workflow = loadWorkflow(selectedWorkflow);
-                if (workflow) {
-                  setNodes(workflow.nodes);
-                  setEdges(workflow.edges);
+              showConfirm(
+                "Cancel Editing",
+                "Cancel editing? Your changes will be lost.",
+                async () => {
+                  // Reload the original workflow to discard changes
+                  try {
+                    const selectedWorkflowObj = workflows.find(
+                      (w) => w.name === selectedWorkflow
+                    );
+                    if (selectedWorkflowObj) {
+                      const workflow = await loadWorkflowById(
+                        selectedWorkflowObj.id
+                      );
+                      if (workflow) {
+                        setNodes(workflow.nodes);
+                        setEdges(workflow.edges);
+                      }
+                    }
+                  } catch (error) {
+                    console.error("Error reloading original workflow:", error);
+                  }
+                  setIsEditMode(false);
                 }
-                setIsEditMode(false);
-              }
+              );
             }}
             style={{
               padding: "10px 16px",
@@ -425,7 +596,7 @@ const WorkflowControls: React.FC<WorkflowControlsProps> = ({
               }}
             >
               <FiSave />
-              Save Workflow
+              Save to Firebase
             </button>
           </div>
 
@@ -446,9 +617,9 @@ const WorkflowControls: React.FC<WorkflowControlsProps> = ({
               }}
             >
               <option value="">Select a workflow</option>
-              {savedWorkflows.map((name) => (
-                <option key={name} value={name}>
-                  {name}
+              {workflows.map((workflow) => (
+                <option key={workflow.id} value={workflow.name}>
+                  {workflow.name}
                 </option>
               ))}
             </select>
@@ -565,6 +736,32 @@ const WorkflowControls: React.FC<WorkflowControlsProps> = ({
           </div>
         </div>
       </details>
+
+      {/* Custom Modals */}
+      <AlertModal
+        isOpen={alertModal.isOpen}
+        onClose={() => setAlertModal({ ...alertModal, isOpen: false })}
+        title={alertModal.title}
+        message={alertModal.message}
+      />
+
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        destructive={confirmModal.destructive}
+      />
+
+      <PromptModal
+        isOpen={promptModal.isOpen}
+        onClose={() => setPromptModal({ ...promptModal, isOpen: false })}
+        onConfirm={promptModal.onConfirm}
+        title={promptModal.title}
+        message={promptModal.message}
+        defaultValue={promptModal.defaultValue}
+      />
     </div>
   );
 };

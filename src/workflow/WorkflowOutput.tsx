@@ -125,7 +125,7 @@ const WorkflowOutput: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
 
             return (
               <div
-                key={index}
+                key={`${index}-${parsedMessage.timestamp}`}
                 style={{
                   alignSelf: isUser ? "flex-end" : "flex-start",
                   maxWidth: "85%",

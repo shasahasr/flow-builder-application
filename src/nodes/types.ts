@@ -13,6 +13,14 @@ export type LLMNodeData = {
   query?: string;
 };
 
+// Define Workflow node data type
+export type WorkflowNodeData = {
+  label?: string;
+  selectedWorkflowId?: string;
+  inputMappings?: Record<string, string>;
+  outputMappings?: Record<string, string>;
+};
+
 export type PositionLoggerNode = Node<{ label?: string }, "position-logger">;
 
 // Define new AI workflow node types
@@ -27,6 +35,7 @@ export type InputParameterNodeType = Node<
 export type ApiCallNodeType = Node<ApiCallNodeData, "api_call">;
 export type ConditionNodeType = Node<ConditionNodeData, "condition">;
 export type LLMNodeType = Node<LLMNodeData, "llm_node">;
+export type WorkflowNodeType = Node<WorkflowNodeData, "workflow_node">;
 
 // Update AppNode to include the more specific node types
 export type AppNode =
@@ -36,6 +45,7 @@ export type AppNode =
   | ApiCallNodeType
   | ConditionNodeType
   | LLMNodeType
+  | WorkflowNodeType
   | Node<{ label?: string | undefined; [key: string]: unknown }, "default">
   | Node<{ label?: string | undefined; [key: string]: unknown }, "output">
   | Node<{ label?: string | undefined; [key: string]: unknown }, "group">;

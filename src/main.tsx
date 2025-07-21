@@ -19,7 +19,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       <BrowserRouter>
         <Routes>
           <Route path="/sign-in" element={<LoginPage />} />
+          <Route path="/sign-in/*" element={<LoginPage />} />
           <Route path="/sign-up" element={<SignUpPage />} />
+          <Route path="/sign-up/*" element={<SignUpPage />} />
           <Route
             path="/app"
             element={
@@ -32,5 +34,5 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         </Routes>
       </BrowserRouter>
     </ClerkProvider>
-  </React.StrictMode>,
+  </React.StrictMode>
 );

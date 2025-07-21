@@ -241,7 +241,24 @@ const ToolingModal: React.FC<ToolingModalProps> = ({
                 )}
               </div>
 
-              {method !== "GET" && (
+              {method === "GET" ? (
+                <div className="form-group">
+                  <label>Query Parameters</label>
+                  <textarea
+                    value={payload}
+                    onChange={(e) => setPayload(e.target.value)}
+                    placeholder='{"status": "active", "limit": "10"}'
+                    className={`code-textarea ${errors.payload ? "error" : ""}`}
+                  />
+                  <small style={{ color: "#6b7280", fontSize: "12px" }}>
+                    These will be added to the URL as query parameters (e.g.,
+                    ?status=active&limit=10)
+                  </small>
+                  {errors.payload && (
+                    <span className="error-text">{errors.payload}</span>
+                  )}
+                </div>
+              ) : (
                 <div className="form-group">
                   <label>Request Body</label>
                   <textarea

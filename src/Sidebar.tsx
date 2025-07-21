@@ -25,11 +25,12 @@ import {
   FiMusic,
   FiVideo,
   FiFilter,
+  FiLayers,
 } from "react-icons/fi";
 
 const onDragStart = (
   event: React.DragEvent<HTMLDivElement>,
-  nodeType: string,
+  nodeType: string
 ) => {
   event.dataTransfer.setData("application/reactflow", nodeType);
   event.dataTransfer.effectAllowed = "move";
@@ -402,6 +403,20 @@ const SidebarMenu: React.FC = () => {
           >
             <FiCpu />
             LLM Node
+          </div>
+          <div
+            style={menuItemStyle}
+            onDragStart={(e) => onDragStart(e, "workflow_node")}
+            draggable
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "rgba(79, 70, 229, 0.1)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "transparent";
+            }}
+          >
+            <FiLayers />
+            Sub Workflow
           </div>
 
           {/* Coming Soon Items */}

@@ -4,14 +4,11 @@ import React, {
   useState,
   useCallback,
   useRef,
-  useEffect,
 } from "react";
 import { Edge } from "@xyflow/react";
 import { AppNode } from "../nodes/types";
 import { WorkflowUtils } from "./WorkflowUtils";
-import { useAuth } from "@clerk/clerk-react";
-import { getUserIdOrDefault } from "../auth/userUtils";
-// Removed Supabase import to use only localStorage
+import { WorkflowService } from "../firebase/workflowService";
 
 // Chat message structure
 export interface ChatMessage {
@@ -32,11 +29,6 @@ interface WorkflowContextType {
     onPreviewOpen?: () => void
   ) => Promise<void>;
   stopWorkflow: () => void;
-  saveWorkflow: (name: string, nodes: AppNode[], edges: Edge[]) => void;
-  loadWorkflow: (name: string) => { nodes: AppNode[]; edges: Edge[] } | null;
-  deleteWorkflow: (name: string) => boolean;
-  updateWorkflowName: (oldName: string, newName: string) => boolean;
-  savedWorkflows: string[];
   clearOutput: () => void;
   submitUserInput: (text: string) => void;
 }
@@ -49,11 +41,6 @@ export const WorkflowContext = createContext<WorkflowContextType>({
   waitingForUserInput: false,
   executeWorkflow: async () => {},
   stopWorkflow: () => {},
-  saveWorkflow: () => {},
-  loadWorkflow: () => null,
-  deleteWorkflow: () => false,
-  updateWorkflowName: () => false,
-  savedWorkflows: [],
   clearOutput: () => {},
   submitUserInput: () => {},
 });
@@ -61,55 +48,18 @@ export const WorkflowContext = createContext<WorkflowContextType>({
 // Hook to use workflow context
 export const useWorkflow = () => useContext(WorkflowContext);
 
-// Save key for local storage
-const SAVED_WORKFLOWS_KEY = "ai_agent_saved_workflows";
-
 // Provider component
 export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const { userId } = useAuth();
-  const currentUserId = getUserIdOrDefault(userId);
   const [workflowState, setWorkflowState] = useState<Record<string, unknown>>(
     {}
   );
   const [workflowOutput, setWorkflowOutput] = useState<string[]>([]);
   const [isExecuting, setIsExecuting] = useState(false);
   const [waitingForUserInput, setWaitingForUserInput] = useState(false);
-  const [savedWorkflows, setSavedWorkflows] = useState<string[]>([]);
   const [abortController, setAbortController] =
     useState<AbortController | null>(null);
-
-  // Load saved workflows when user changes
-  useEffect(() => {
-    const fetchSavedWorkflows = async () => {
-      try {
-        // Always load from localStorage in this simplified version
-        loadFromLocalStorage();
-      } catch (error) {
-        console.error("Error in fetchSavedWorkflows:", error);
-        setSavedWorkflows([]);
-      }
-    };
-
-    // Helper to load from localStorage
-    const loadFromLocalStorage = () => {
-      // Initialize from localStorage if available
-      const saved = localStorage.getItem(SAVED_WORKFLOWS_KEY);
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          setSavedWorkflows(Object.keys(parsed));
-        } catch (e) {
-          setSavedWorkflows([]);
-        }
-      } else {
-        setSavedWorkflows([]);
-      }
-    };
-
-    fetchSavedWorkflows();
-  }, [currentUserId]);
 
   // Use refs to store callback functions for handling user input
   const userInputResolveRef = useRef<((value: string) => void) | null>(null);
@@ -139,77 +89,6 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
-  // Save workflow to localStorage only
-  const saveWorkflow = useCallback(
-    (name: string, nodes: AppNode[], edges: Edge[]) => {
-      console.log(`Saving workflow "${name}" for user ${currentUserId}`);
-
-      // Always save to localStorage in this simplified version
-      saveToLocalStorage(name, nodes, edges);
-    },
-    [currentUserId]
-  );
-
-  // Helper function to save to localStorage
-  const saveToLocalStorage = useCallback(
-    (name: string, nodes: AppNode[], edges: Edge[]) => {
-      // Get existing saved workflows
-      const existingSaved = localStorage.getItem(SAVED_WORKFLOWS_KEY);
-      let savedData: Record<string, { nodes: AppNode[]; edges: Edge[] }> = {};
-
-      if (existingSaved) {
-        try {
-          savedData = JSON.parse(existingSaved);
-        } catch (e) {
-          console.error("Error parsing saved workflows", e);
-        }
-      }
-
-      // Add or update the workflow
-      savedData[name] = { nodes, edges };
-
-      // Save back to localStorage
-      localStorage.setItem(SAVED_WORKFLOWS_KEY, JSON.stringify(savedData));
-
-      // Update state
-      setSavedWorkflows(Object.keys(savedData));
-    },
-    []
-  );
-
-  // Helper function to load from localStorage
-  const loadFromLocalStorage = useCallback((name: string) => {
-    const existingSaved = localStorage.getItem(SAVED_WORKFLOWS_KEY);
-    if (!existingSaved) return null;
-
-    try {
-      const savedData = JSON.parse(existingSaved);
-      if (savedData[name]) {
-        // Cast the loaded data to the proper types
-        const workflow = savedData[name];
-        return {
-          nodes: workflow.nodes as AppNode[],
-          edges: workflow.edges as Edge[],
-        };
-      }
-    } catch (e) {
-      console.error("Error loading workflow from localStorage:", e);
-    }
-
-    return null;
-  }, []);
-
-  // Load workflow from localStorage only
-  const loadWorkflow = useCallback(
-    (name: string) => {
-      console.log(`Loading workflow "${name}" for user ${currentUserId}`);
-
-      // Always load from localStorage in this simplified version
-      return loadFromLocalStorage(name);
-    },
-    [currentUserId, loadFromLocalStorage]
-  );
-
   // Helper function to process a message with variable replacements
   const processMessage = useCallback(
     (message: string, contextData: Record<string, unknown>): string => {
@@ -227,7 +106,9 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
         content: message,
         timestamp: new Date().toISOString(),
       };
-      setWorkflowOutput((prev) => [...prev, JSON.stringify(messageObj)]);
+      const jsonMessage = JSON.stringify(messageObj);
+      console.log(`📝 DEBUG: Adding message to output:`, jsonMessage);
+      setWorkflowOutput((prev) => [...prev, jsonMessage]);
     },
     []
   );
@@ -273,8 +154,16 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
           let message = (node.data?.message as string) || "No message provided";
           message = processMessage(message, contextData);
 
+          console.log(
+            `🔧 DEBUG: Executing display_message node with message: "${message}"`
+          );
+
           // Add as an assistant message
           addOutputMessage(message, "assistant");
+
+          // Add a small delay to prevent React state batching issues
+          await new Promise((resolve) => setTimeout(resolve, 1));
+
           break;
         }
 
@@ -699,13 +588,39 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
                       const toolHeaders = matchedTool.headers
                         ? JSON.parse(matchedTool.headers)
                         : { "Content-Type": "application/json" };
-                      const toolResponse = await fetch(matchedTool.url, {
+
+                      // Handle URL and body based on method
+                      let finalUrl = matchedTool.url;
+                      let requestBody = undefined;
+
+                      if (matchedTool.method === "GET" && matchedTool.payload) {
+                        // For GET requests, add payload as query parameters
+                        try {
+                          const params = JSON.parse(matchedTool.payload);
+                          const urlParams = new URLSearchParams();
+                          Object.entries(params).forEach(([key, value]) => {
+                            urlParams.append(key, String(value));
+                          });
+                          finalUrl = `${matchedTool.url}${
+                            matchedTool.url.includes("?") ? "&" : "?"
+                          }${urlParams.toString()}`;
+                        } catch (error) {
+                          console.warn(
+                            "Invalid JSON in query parameters, using URL as-is"
+                          );
+                        }
+                      } else if (
+                        matchedTool.method !== "GET" &&
+                        matchedTool.payload
+                      ) {
+                        // For non-GET requests, use payload as request body
+                        requestBody = matchedTool.payload;
+                      }
+
+                      const toolResponse = await fetch(finalUrl, {
                         method: matchedTool.method,
                         headers: toolHeaders,
-                        body:
-                          matchedTool.method !== "GET" && matchedTool.payload
-                            ? matchedTool.payload
-                            : undefined,
+                        body: requestBody,
                       });
 
                       if (!toolResponse.ok) {
@@ -835,6 +750,111 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
             console.error(`LLM initialization failed: ${error}`);
             addOutputMessage(
               `LLM initialization failed: ${error}`,
+              "assistant"
+            );
+          }
+          break;
+        }
+
+        case "workflow_node": {
+          try {
+            // Get workflow configuration from node data
+            const selectedWorkflowId = node.data?.selectedWorkflowId as string;
+            const inputMappings =
+              (node.data?.inputMappings as Record<string, string>) || {};
+            const outputMappings =
+              (node.data?.outputMappings as Record<string, string>) || {};
+
+            if (!selectedWorkflowId) {
+              addOutputMessage(
+                "⚠️ No workflow selected in Sub Workflow node",
+                "assistant"
+              );
+              break;
+            }
+
+            // Get the workflow from Firebase
+            const savedWorkflow = await WorkflowService.getWorkflow(
+              selectedWorkflowId
+            );
+
+            if (!savedWorkflow) {
+              addOutputMessage(
+                `❌ Sub-workflow not found: ${selectedWorkflowId}`,
+                "assistant"
+              );
+              break;
+            }
+
+            console.log(`Sub-workflow nodes:`, savedWorkflow.nodes);
+            console.log(`Sub-workflow edges:`, savedWorkflow.edges);
+
+            // Prepare context for sub-workflow execution
+            const subWorkflowContext: Record<string, unknown> = {};
+
+            // Map inputs from current context to sub-workflow context
+            for (const [subParam, currentVar] of Object.entries(
+              inputMappings
+            )) {
+              if (currentVar && contextData[currentVar] !== undefined) {
+                subWorkflowContext[subParam] = contextData[currentVar];
+                console.log(
+                  `Mapping input: ${subParam} = ${contextData[currentVar]} (from ${currentVar})`
+                );
+              }
+            }
+
+            // Create node and edge maps for sub-workflow
+            const subNodeMap: Record<string, AppNode> = {};
+            savedWorkflow.nodes.forEach((subNode) => {
+              subNodeMap[subNode.id] = subNode as AppNode;
+            });
+
+            const subNodeOutgoingEdges: Record<string, Edge[]> = {};
+            savedWorkflow.edges.forEach((edge) => {
+              if (!subNodeOutgoingEdges[edge.source]) {
+                subNodeOutgoingEdges[edge.source] = [];
+              }
+              subNodeOutgoingEdges[edge.source].push(edge);
+            });
+
+            // Find starting nodes for sub-workflow
+            const subNodesWithIncomingEdges = new Set(
+              savedWorkflow.edges.map((edge) => edge.target)
+            );
+            const subStartingNodeIds = savedWorkflow.nodes
+              .filter((subNode) => !subNodesWithIncomingEdges.has(subNode.id))
+              .map((subNode) => subNode.id);
+
+            console.log(`Sub-workflow starting nodes:`, subStartingNodeIds);
+
+            // Execute sub-workflow starting nodes
+            let subWorkflowResult = subWorkflowContext;
+            for (const subNodeId of subStartingNodeIds) {
+              console.log(`Executing sub-workflow node:`, subNodeId);
+              subWorkflowResult = await executeNode(
+                subNodeId,
+                subNodeMap,
+                subNodeOutgoingEdges,
+                subWorkflowResult
+              );
+            }
+
+            // Map outputs from sub-workflow back to current context
+            for (const [subParam, currentVar] of Object.entries(
+              outputMappings
+            )) {
+              if (currentVar && subWorkflowResult[subParam] !== undefined) {
+                nextContextData[currentVar] = subWorkflowResult[subParam];
+                console.log(
+                  `Mapping output: ${currentVar} = ${subWorkflowResult[subParam]} (from ${subParam})`
+                );
+              }
+            }
+          } catch (error) {
+            console.error(`Sub-workflow execution failed: ${error}`);
+            addOutputMessage(
+              `❌ Sub-workflow execution failed: ${error}`,
               "assistant"
             );
           }
@@ -1064,76 +1084,6 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
     [executeNode]
   );
 
-  // Helper function to delete from localStorage
-  const deleteFromLocalStorage = useCallback((name: string): boolean => {
-    // Get existing saved workflows
-    const existingSaved = localStorage.getItem(SAVED_WORKFLOWS_KEY);
-    if (!existingSaved) return false;
-
-    try {
-      const savedData = JSON.parse(existingSaved);
-      if (!savedData[name]) return false;
-
-      // Delete the workflow
-      delete savedData[name];
-
-      // Save back to localStorage
-      localStorage.setItem(SAVED_WORKFLOWS_KEY, JSON.stringify(savedData));
-
-      // Update state
-      setSavedWorkflows(Object.keys(savedData));
-      return true;
-    } catch (e) {
-      console.error("Error deleting workflow from localStorage:", e);
-      return false;
-    }
-  }, []);
-
-  // Delete a workflow from localStorage only
-  const deleteWorkflow = useCallback(
-    (name: string): boolean => {
-      console.log(`Deleting workflow "${name}" for user ${currentUserId}`);
-
-      // Always delete from localStorage in this simplified version
-      return deleteFromLocalStorage(name);
-    },
-    [currentUserId, deleteFromLocalStorage]
-  );
-
-  // Update workflow name
-  const updateWorkflowName = useCallback(
-    (oldName: string, newName: string): boolean => {
-      if (newName.trim() === "" || oldName === newName) return false;
-
-      // Get existing saved workflows
-      const existingSaved = localStorage.getItem(SAVED_WORKFLOWS_KEY);
-      if (!existingSaved) return false;
-
-      try {
-        const savedData = JSON.parse(existingSaved);
-        if (!savedData[oldName]) return false;
-
-        // Don't overwrite existing workflow with the new name
-        if (savedData[newName]) return false;
-
-        // Move workflow data to new name
-        savedData[newName] = savedData[oldName];
-        delete savedData[oldName];
-
-        // Save back to localStorage
-        localStorage.setItem(SAVED_WORKFLOWS_KEY, JSON.stringify(savedData));
-
-        // Update state
-        setSavedWorkflows(Object.keys(savedData));
-        return true;
-      } catch (e) {
-        console.error("Error updating workflow name", e);
-        return false;
-      }
-    },
-    []
-  );
-
   const contextValue: WorkflowContextType = {
     workflowState,
     workflowOutput,
@@ -1141,11 +1091,6 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
     waitingForUserInput,
     executeWorkflow,
     stopWorkflow,
-    saveWorkflow,
-    loadWorkflow,
-    deleteWorkflow,
-    updateWorkflowName,
-    savedWorkflows,
     clearOutput,
     submitUserInput,
   };
