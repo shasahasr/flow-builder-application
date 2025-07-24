@@ -1,6 +1,8 @@
 import { NodeProps, Handle, Position, useReactFlow } from "@xyflow/react";
 import { useState, useEffect } from "react";
 import { getNodeContainerStyle, nodeStyles } from "../nodeStyles";
+import { WorkflowUtils } from "../../workflow/WorkflowUtils";
+import type { AppNode } from "../types";
 
 // Define the input parameter node data structure
 export type InputParameterNodeData = {
@@ -19,7 +21,8 @@ function InputParameterNode({ data, isConnectable, id }: NodeProps) {
   const [parameterName, setParameterName] = useState("");
   const [saveAsVariable, setSaveAsVariable] = useState(false);
   const [variableName, setVariableName] = useState("");
-  const { setNodes } = useReactFlow();
+  const [existingVariables, setExistingVariables] = useState<string[]>([]);
+  const { setNodes, getNodes, getEdges } = useReactFlow();
 
   // Initialize state from data when component mounts or data changes
   useEffect(() => {
@@ -36,6 +39,23 @@ function InputParameterNode({ data, isConnectable, id }: NodeProps) {
     }
   }, [data]);
 
+  // Update existing variables in current workflow when nodes change
+  useEffect(() => {
+    const currentNodes = getNodes() as AppNode[];
+    const currentEdges = getEdges();
+    console.log(
+      `🔧 InputParameter ${id}: Checking for conflicts with ${currentNodes.length} nodes and ${currentEdges.length} edges`
+    );
+    // Get only variables that would exist before this input parameter node executes
+    const existing = WorkflowUtils.getVariablesBeforeNode(
+      currentNodes,
+      currentEdges,
+      id
+    );
+    setExistingVariables(existing);
+    console.log(`🔧 InputParameter ${id}: Found existing variables:`, existing);
+  }, [id, getNodes, getEdges, data]); // Re-run when nodes, edges, or node data changes
+
   const handleQuestionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value;
     setQuestion(newValue);
@@ -50,7 +70,7 @@ function InputParameterNode({ data, isConnectable, id }: NodeProps) {
           };
         }
         return node;
-      }),
+      })
     );
   };
 
@@ -68,12 +88,12 @@ function InputParameterNode({ data, isConnectable, id }: NodeProps) {
           };
         }
         return node;
-      }),
+      })
     );
   };
 
   const handleParameterNameChange = (
-    e: React.ChangeEvent<HTMLInputElement>,
+    e: React.ChangeEvent<HTMLInputElement>
   ) => {
     const newValue = e.target.value;
     setParameterName(newValue);
@@ -88,12 +108,12 @@ function InputParameterNode({ data, isConnectable, id }: NodeProps) {
           };
         }
         return node;
-      }),
+      })
     );
   };
 
   const handleSaveAsVariableChange = (
-    e: React.ChangeEvent<HTMLInputElement>,
+    e: React.ChangeEvent<HTMLInputElement>
   ) => {
     const checked = e.target.checked;
     setSaveAsVariable(checked);
@@ -108,7 +128,7 @@ function InputParameterNode({ data, isConnectable, id }: NodeProps) {
           };
         }
         return node;
-      }),
+      })
     );
   };
 
@@ -126,7 +146,7 @@ function InputParameterNode({ data, isConnectable, id }: NodeProps) {
           };
         }
         return node;
-      }),
+      })
     );
   };
 
@@ -203,17 +223,64 @@ function InputParameterNode({ data, isConnectable, id }: NodeProps) {
 
       {saveAsVariable && (
         <div style={nodeStyles.fieldGroup}>
-          <label style={nodeStyles.label}>Custom Variable Name:</label>
+          <label style={nodeStyles.label}>
+            Custom Variable Name:
+            {(() => {
+              const finalVariableName = variableName || parameterName;
+              const hasConflict = existingVariables.includes(finalVariableName);
+              console.log(
+                `🔧 InputParameter ${id}: Checking conflict for "${finalVariableName}" against existing:`,
+                existingVariables,
+                "hasConflict:",
+                hasConflict
+              );
+              return hasConflict ? (
+                <span
+                  style={{
+                    color: "#DC2626",
+                    fontSize: "10px",
+                    marginLeft: "4px",
+                  }}
+                >
+                  ⚠ Name exists
+                </span>
+              ) : null;
+            })()}
+          </label>
           <input
             type="text"
             value={variableName}
             onChange={handleVariableNameChange}
-            style={nodeStyles.input}
+            style={{
+              ...nodeStyles.input,
+              borderColor: (() => {
+                const finalVariableName = variableName || parameterName;
+                const hasConflict =
+                  existingVariables.includes(finalVariableName);
+                return hasConflict ? "#DC2626" : "#E5E7EB";
+              })(),
+            }}
             placeholder={parameterName || "customVarName"}
           />
-          <div style={nodeStyles.helpText}>
-            Access with: $&#123;{variableName || parameterName}&#125;
-          </div>
+          {(() => {
+            const finalVariableName = variableName || parameterName;
+            const hasConflict = existingVariables.includes(finalVariableName);
+            return hasConflict ? (
+              <div
+                style={{
+                  fontSize: "10px",
+                  color: "#DC2626",
+                  marginTop: "2px",
+                }}
+              >
+                Variable name already exists in this workflow
+              </div>
+            ) : (
+              <div style={nodeStyles.helpText}>
+                Access with: $&#123;{finalVariableName}&#125;
+              </div>
+            );
+          })()}
         </div>
       )}
 

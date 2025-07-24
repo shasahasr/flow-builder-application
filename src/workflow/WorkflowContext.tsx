@@ -191,7 +191,24 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
           nextContextData[paramName] = userInput;
 
           // If saveAsVariable is true, also store with the custom variable name
-          if (saveAsVariable && variableName && variableName !== paramName) {
+          if (saveAsVariable && variableName) {
+            // Check if this variable already exists in the context (conflict detection)
+            if (nextContextData.hasOwnProperty(variableName)) {
+              // Show error message and stop execution
+              addOutputMessage(
+                `❌ Error: Variable name '${variableName}' already exists. Cannot save duplicate variable.`,
+                "assistant"
+              );
+              // Log the conflict for debugging
+              console.warn(
+                `Variable conflict detected: ${variableName} already exists`
+              );
+              // Throw error to stop the entire workflow execution
+              throw new Error(
+                `WORKFLOW_STOP: Variable name '${variableName}' already exists. Cannot save duplicate variable.`
+              );
+            }
+
             nextContextData[variableName] = userInput;
 
             // Don't show variable saving notifications to keep chat clean
@@ -760,10 +777,8 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
           try {
             // Get workflow configuration from node data
             const selectedWorkflowId = node.data?.selectedWorkflowId as string;
-            const inputMappings =
-              (node.data?.inputMappings as Record<string, string>) || {};
-            const outputMappings =
-              (node.data?.outputMappings as Record<string, string>) || {};
+            const selectedVariables =
+              (node.data?.selectedVariables as Record<string, string>) || {};
 
             if (!selectedWorkflowId) {
               addOutputMessage(
@@ -789,20 +804,8 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
             console.log(`Sub-workflow nodes:`, savedWorkflow.nodes);
             console.log(`Sub-workflow edges:`, savedWorkflow.edges);
 
-            // Prepare context for sub-workflow execution
+            // Prepare context for sub-workflow execution - start with empty context
             const subWorkflowContext: Record<string, unknown> = {};
-
-            // Map inputs from current context to sub-workflow context
-            for (const [subParam, currentVar] of Object.entries(
-              inputMappings
-            )) {
-              if (currentVar && contextData[currentVar] !== undefined) {
-                subWorkflowContext[subParam] = contextData[currentVar];
-                console.log(
-                  `Mapping input: ${subParam} = ${contextData[currentVar]} (from ${currentVar})`
-                );
-              }
-            }
 
             // Create node and edge maps for sub-workflow
             const subNodeMap: Record<string, AppNode> = {};
@@ -832,23 +835,68 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
             let subWorkflowResult = subWorkflowContext;
             for (const subNodeId of subStartingNodeIds) {
               console.log(`Executing sub-workflow node:`, subNodeId);
-              subWorkflowResult = await executeNode(
-                subNodeId,
-                subNodeMap,
-                subNodeOutgoingEdges,
-                subWorkflowResult
-              );
+              try {
+                subWorkflowResult = await executeNode(
+                  subNodeId,
+                  subNodeMap,
+                  subNodeOutgoingEdges,
+                  subWorkflowResult
+                );
+                console.log(
+                  `Sub-workflow context after node ${subNodeId}:`,
+                  subWorkflowResult
+                );
+              } catch (error) {
+                // If it's a workflow stop error, propagate it up to stop main workflow
+                if (
+                  error instanceof Error &&
+                  error.message.startsWith("WORKFLOW_STOP:")
+                ) {
+                  console.log("Sub-workflow stopped due to variable conflict");
+                  throw error; // Propagate to main workflow
+                } else {
+                  // For other errors, log and propagate
+                  console.error(
+                    `Error in sub-workflow node ${subNodeId}:`,
+                    error
+                  );
+                  throw error;
+                }
+              }
             }
 
-            // Map outputs from sub-workflow back to current context
-            for (const [subParam, currentVar] of Object.entries(
-              outputMappings
+            console.log(
+              "Final sub-workflow result context:",
+              subWorkflowResult
+            );
+
+            // Import selected variables from sub-workflow to current context
+            console.log(
+              "About to import variables. Selected variables:",
+              selectedVariables
+            );
+            console.log("Sub-workflow result context:", subWorkflowResult);
+
+            for (const [subVar, localVar] of Object.entries(
+              selectedVariables
             )) {
-              if (currentVar && subWorkflowResult[subParam] !== undefined) {
-                nextContextData[currentVar] = subWorkflowResult[subParam];
+              console.log(`Checking variable: ${subVar} -> ${localVar}`);
+              console.log(
+                `Variable value in sub-workflow:`,
+                subWorkflowResult[subVar]
+              );
+
+              if (localVar && subWorkflowResult[subVar] !== undefined) {
+                nextContextData[localVar] = subWorkflowResult[subVar];
                 console.log(
-                  `Mapping output: ${currentVar} = ${subWorkflowResult[subParam]} (from ${subParam})`
+                  `Importing variable: ${localVar} = ${subWorkflowResult[subVar]} (from sub-workflow variable ${subVar})`
                 );
+              } else {
+                console.log(`Skipping variable ${subVar} because:`, {
+                  hasLocalVar: !!localVar,
+                  hasValue: subWorkflowResult[subVar] !== undefined,
+                  value: subWorkflowResult[subVar],
+                });
               }
             }
           } catch (error) {
@@ -985,12 +1033,31 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
 
           // Execute all nodes connected to matching condition paths
           for (const edge of filteredEdges) {
-            await executeNode(
-              edge.target,
-              nodeMap,
-              nodeOutgoingEdges,
-              nextContextData
-            );
+            try {
+              const edgeResult = await executeNode(
+                edge.target,
+                nodeMap,
+                nodeOutgoingEdges,
+                nextContextData
+              );
+              // Merge the result back into our context
+              Object.assign(nextContextData, edgeResult);
+            } catch (error) {
+              // If it's a workflow stop error, propagate it up
+              if (
+                error instanceof Error &&
+                error.message.startsWith("WORKFLOW_STOP:")
+              ) {
+                throw error;
+              } else {
+                // For other errors, log and continue
+                console.error(
+                  `Error in condition node outgoing edge ${edge.target}:`,
+                  error
+                );
+                throw error; // Re-throw other errors as well
+              }
+            }
           }
 
           // Return early for condition nodes as we've already handled the outgoing edges
@@ -1001,12 +1068,28 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
       // For non-condition nodes, execute all outgoing nodes
       const outgoingEdges = nodeOutgoingEdges[nodeId] || [];
       for (const edge of outgoingEdges) {
-        await executeNode(
-          edge.target,
-          nodeMap,
-          nodeOutgoingEdges,
-          nextContextData
-        );
+        try {
+          const edgeResult = await executeNode(
+            edge.target,
+            nodeMap,
+            nodeOutgoingEdges,
+            nextContextData
+          );
+          // Merge the result back into our context
+          Object.assign(nextContextData, edgeResult);
+        } catch (error) {
+          // If it's a workflow stop error, propagate it up
+          if (
+            error instanceof Error &&
+            error.message.startsWith("WORKFLOW_STOP:")
+          ) {
+            throw error;
+          } else {
+            // For other errors, log and continue
+            console.error(`Error in outgoing node ${edge.target}:`, error);
+            throw error; // Re-throw other errors as well
+          }
+        }
       }
 
       return nextContextData;
@@ -1070,7 +1153,29 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({
 
         // Execute starting nodes
         for (const nodeId of startingNodeIds) {
-          await executeNode(nodeId, nodeMap, nodeOutgoingEdges, {});
+          try {
+            await executeNode(nodeId, nodeMap, nodeOutgoingEdges, {});
+          } catch (error) {
+            // Check if this is a workflow stop error (variable conflict)
+            if (
+              error instanceof Error &&
+              error.message.startsWith("WORKFLOW_STOP:")
+            ) {
+              console.log(
+                "Workflow execution stopped due to variable conflict"
+              );
+              // Stop execution immediately - the error message was already shown to user
+              return;
+            } else {
+              // For other errors, log them and continue
+              console.error(`Error executing node ${nodeId}:`, error);
+              addOutputMessage(
+                `❌ Error executing workflow: ${error}`,
+                "assistant"
+              );
+              return;
+            }
+          }
         }
       } finally {
         // Only set isExecuting to false if there's no active LLM conversation handler

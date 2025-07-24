@@ -17,8 +17,7 @@ export type LLMNodeData = {
 export type WorkflowNodeData = {
   label?: string;
   selectedWorkflowId?: string;
-  inputMappings?: Record<string, string>;
-  outputMappings?: Record<string, string>;
+  selectedVariables?: Record<string, string>;
 };
 
 export type PositionLoggerNode = Node<{ label?: string }, "position-logger">;

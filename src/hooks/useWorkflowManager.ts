@@ -8,6 +8,7 @@ export const useWorkflowManager = () => {
   const [workflows, setWorkflows] = useState<WorkflowSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [workflowCache, setWorkflowCache] = useState<Map<string, SavedWorkflow>>(new Map());
 
   // Load user's workflows on mount
   useEffect(() => {
@@ -78,14 +79,22 @@ export const useWorkflowManager = () => {
 
   const loadWorkflowById = async (workflowId: string): Promise<SavedWorkflow | null> => {
     try {
+      // Check cache first
+      if (workflowCache.has(workflowId)) {
+        return workflowCache.get(workflowId)!;
+      }
+
       setLoading(true);
       setError(null);
       
       const workflow = await WorkflowService.getWorkflow(workflowId);
       
       if (workflow) {
-        // Increment usage count
-        await WorkflowService.incrementUsageCount(workflowId);
+        // Cache the workflow to prevent duplicate requests
+        setWorkflowCache(prev => new Map(prev).set(workflowId, workflow));
+        
+        // Increment usage count (but don't await to avoid slowing down the UI)
+        WorkflowService.incrementUsageCount(workflowId).catch(console.error);
       }
       
       return workflow;
@@ -107,6 +116,13 @@ export const useWorkflowManager = () => {
       
       // Refresh the workflows list
       await loadWorkflows();
+      
+      // Clear cache for deleted workflow
+      setWorkflowCache(prev => {
+        const newCache = new Map(prev);
+        newCache.delete(workflowId);
+        return newCache;
+      });
       
       return true;
     } catch (err) {
@@ -161,12 +177,57 @@ const detectInputParameters = (nodes: Node[]) => {
 };
 
 const detectOutputParameters = (nodes: Node[]) => {
-  return nodes
-    .filter(node => node.type === 'display_message')
-    .map(node => ({
-      name: (node.data?.label as string) || `output_${node.id}`,
-      type: 'string' as const,
-      required: false,
-      description: 'Output parameter'
-    }));
+  const outputVariables: Array<{
+    name: string;
+    type: 'string';
+    required: boolean;
+    description: string;
+    nodeType: string;
+    nodeId: string;
+  }> = [];
+
+  nodes.forEach(node => {
+    // Input Parameter nodes with saveAsVariable enabled
+    if (node.type === 'input_parameter' && node.data?.saveAsVariable) {
+      const variableName = (node.data?.variableName as string) || (node.data?.paramName as string) || `input_${node.id}`;
+      outputVariables.push({
+        name: variableName,
+        type: 'string' as const,
+        required: false,
+        description: `Input parameter saved as variable`,
+        nodeType: 'input_parameter',
+        nodeId: node.id
+      });
+    }
+
+    // API Call nodes with saveAsVariable enabled
+    if (node.type === 'api_call' && node.data?.saveAsVariable) {
+      const variableName = (node.data?.variableName as string) || 'apiResponse';
+      outputVariables.push({
+        name: variableName,
+        type: 'string' as const,
+        required: false,
+        description: `API response saved as variable`,
+        nodeType: 'api_call',
+        nodeId: node.id
+      });
+    }
+
+    // Display Message nodes (always output their content)
+    if (node.type === 'display_message') {
+      const variableName = (node.data?.name as string) || `message_${node.id}`;
+      outputVariables.push({
+        name: variableName,
+        type: 'string' as const,
+        required: false,
+        description: 'Display message content',
+        nodeType: 'display_message',
+        nodeId: node.id
+      });
+    }
+
+    // TODO: Add other node types that can save variables as they're implemented
+  });
+
+  return outputVariables;
 };

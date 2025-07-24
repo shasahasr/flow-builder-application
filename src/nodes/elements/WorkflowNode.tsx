@@ -2,15 +2,8 @@ import { useState, useEffect } from "react";
 import { Handle, Position, type NodeProps, useReactFlow } from "@xyflow/react";
 import { nodeStyles, getNodeContainerStyle } from "../nodeStyles";
 import { useWorkflowManager } from "../../hooks/useWorkflowManager";
-
-
-interface InputMapping {
-  [parameterName: string]: string; // maps to input variable names
-}
-
-interface OutputMapping {
-  [parameterName: string]: string; // maps to output variable names
-}
+import { WorkflowUtils } from "../../workflow/WorkflowUtils";
+import type { AppNode } from "../types";
 
 /**
  * Sub Workflow Node
@@ -19,31 +12,33 @@ interface OutputMapping {
  *
  * How it works:
  * 1. Select a saved workflow from the dropdown
- * 2. Map input parameters from the current workflow to the sub-workflow
- * 3. When executed, it runs the selected workflow with the provided inputs
- * 4. Returns the sub-workflow outputs back to the main workflow
+ * 2. Import variables from the sub-workflow into the current workflow
+ * 3. When executed, it runs the selected workflow
+ * 4. Variables from the sub-workflow are available for use in the main workflow
  *
- * Example: You can create a "Weather Checker" sub-workflow that takes a city name
- * and returns weather data, then reuse it in multiple larger workflows.
+ * Example: You can create a "User Data Collector" sub-workflow that gathers user information
+ * and saves variables like 'email' and 'name', then import those variables for use in the main workflow.
  */
 
 const WorkflowNode = ({ data, isConnectable, id }: NodeProps) => {
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string>(
     typeof data.selectedWorkflowId === "string" ? data.selectedWorkflowId : ""
   );
-  const [inputMappings, setInputMappings] = useState<InputMapping>(
-    typeof data.inputMappings === "object" && data.inputMappings
-      ? (data.inputMappings as InputMapping)
+  const [selectedVariables, setSelectedVariables] = useState<
+    Record<string, string>
+  >(
+    typeof data.selectedVariables === "object" && data.selectedVariables
+      ? (data.selectedVariables as Record<string, string>)
       : {}
   );
-  const [outputMappings, setOutputMappings] = useState<OutputMapping>(
-    typeof data.outputMappings === "object" && data.outputMappings
-      ? (data.outputMappings as OutputMapping)
-      : {}
+  const [subWorkflowVariables, setSubWorkflowVariables] = useState<string[]>(
+    []
   );
+  const [existingVariables, setExistingVariables] = useState<string[]>([]);
+  const [loadedWorkflowId, setLoadedWorkflowId] = useState<string>(""); // Cache to prevent duplicate loads
 
-  const { setNodes } = useReactFlow();
-  const { workflows, loading } = useWorkflowManager();
+  const { setNodes, getNodes, getEdges } = useReactFlow();
+  const { workflows, loading, loadWorkflowById } = useWorkflowManager();
 
   // Convert Firebase workflows to WorkflowOption format
   const availableWorkflows = workflows.map((w) => ({
@@ -63,12 +58,48 @@ const WorkflowNode = ({ data, isConnectable, id }: NodeProps) => {
     if (data && typeof data === "object") {
       if ("selectedWorkflowId" in data && data.selectedWorkflowId)
         setSelectedWorkflowId(data.selectedWorkflowId as string);
-      if ("inputMappings" in data && data.inputMappings)
-        setInputMappings(data.inputMappings as InputMapping);
-      if ("outputMappings" in data && data.outputMappings)
-        setOutputMappings(data.outputMappings as OutputMapping);
+      if ("selectedVariables" in data && data.selectedVariables)
+        setSelectedVariables(data.selectedVariables as Record<string, string>);
     }
   }, [data]);
+
+  // Update existing variables in current workflow when nodes change
+  useEffect(() => {
+    const currentNodes = getNodes() as AppNode[];
+    const currentEdges = getEdges();
+    // Get only variables that would exist before this workflow node executes
+    const existing = WorkflowUtils.getVariablesBeforeNode(
+      currentNodes,
+      currentEdges,
+      id
+    );
+    setExistingVariables(existing);
+  }, [id, getNodes, getEdges]); // Re-run when nodes or edges change
+
+  // Load sub-workflow variables when workflow selection changes
+  useEffect(() => {
+    // Only load if workflow changed and we haven't loaded this workflow yet
+    if (selectedWorkflowId && selectedWorkflowId !== loadedWorkflowId) {
+      setLoadedWorkflowId(selectedWorkflowId); // Mark as loading
+      loadWorkflowById(selectedWorkflowId)
+        .then((workflow) => {
+          if (workflow) {
+            // Get variables from the sub-workflow's nodes
+            const subWorkflowVariables = WorkflowUtils.getExistingVariables(
+              workflow.nodes as AppNode[]
+            );
+            setSubWorkflowVariables(subWorkflowVariables);
+          }
+        })
+        .catch((error) => {
+          console.error("Error loading sub-workflow:", error);
+          setLoadedWorkflowId(""); // Reset on error
+        });
+    } else if (!selectedWorkflowId) {
+      setSubWorkflowVariables([]);
+      setLoadedWorkflowId("");
+    }
+  }, [selectedWorkflowId, loadedWorkflowId, loadWorkflowById]);
 
   const updateNodeData = (key: string, value: any) => {
     setNodes((nds) =>
@@ -88,29 +119,28 @@ const WorkflowNode = ({ data, isConnectable, id }: NodeProps) => {
     setSelectedWorkflowId(workflowId);
     updateNodeData("selectedWorkflowId", workflowId);
 
-    // Reset mappings when workflow changes
-    setInputMappings({});
-    setOutputMappings({});
-    updateNodeData("inputMappings", {});
-    updateNodeData("outputMappings", {});
+    // Reset variables when workflow changes
+    setSelectedVariables({});
+    updateNodeData("selectedVariables", {});
+
+    // Reset cache to allow loading new workflow
+    if (workflowId !== loadedWorkflowId) {
+      setLoadedWorkflowId("");
+    }
   };
 
-  const handleInputMappingChange = (
-    parameterName: string,
-    mappedValue: string
+  const handleVariableSelectionChange = (
+    subWorkflowVariable: string,
+    localVariableName: string
   ) => {
-    const newMappings = { ...inputMappings, [parameterName]: mappedValue };
-    setInputMappings(newMappings);
-    updateNodeData("inputMappings", newMappings);
-  };
-
-  const handleOutputMappingChange = (
-    parameterName: string,
-    mappedValue: string
-  ) => {
-    const newMappings = { ...outputMappings, [parameterName]: mappedValue };
-    setOutputMappings(newMappings);
-    updateNodeData("outputMappings", newMappings);
+    const newSelectedVariables = { ...selectedVariables };
+    if (localVariableName) {
+      newSelectedVariables[subWorkflowVariable] = localVariableName;
+    } else {
+      delete newSelectedVariables[subWorkflowVariable];
+    }
+    setSelectedVariables(newSelectedVariables);
+    updateNodeData("selectedVariables", newSelectedVariables);
   };
 
   return (
@@ -165,8 +195,8 @@ const WorkflowNode = ({ data, isConnectable, id }: NodeProps) => {
             {selectedWorkflow.description}
           </div>
 
-          {/* Input Parameter Mappings */}
-          {selectedWorkflow.inputParameters.length > 0 && (
+          {/* Variable Import Section */}
+          {subWorkflowVariables.length > 0 && (
             <div style={nodeStyles.fieldGroup}>
               <label
                 style={{
@@ -175,55 +205,105 @@ const WorkflowNode = ({ data, isConnectable, id }: NodeProps) => {
                   fontWeight: "600",
                 }}
               >
-                Input Mappings:
+                Import Variables:
               </label>
-              {selectedWorkflow.inputParameters.map((param) => (
-                <div key={param} style={{ marginBottom: "8px" }}>
-                  <label style={{ ...nodeStyles.label, fontSize: "12px" }}>
-                    {param}:
-                    <input
-                      type="text"
-                      value={inputMappings[param] || ""}
-                      onChange={(e) =>
-                        handleInputMappingChange(param, e.target.value)
-                      }
-                      style={{ ...nodeStyles.input, fontSize: "12px" }}
-                      placeholder={`Map ${param} to...`}
-                    />
-                  </label>
-                </div>
-              ))}
-            </div>
-          )}
+              <div
+                style={{ fontSize: "11px", color: "#666", marginBottom: "8px" }}
+              >
+                Select variables from the sub-workflow to import into this
+                workflow
+              </div>
+              {subWorkflowVariables.map((variable) => {
+                const hasConflict = existingVariables.includes(variable);
+                const selectedName = selectedVariables[variable] || "";
 
-          {/* Output Parameter Mappings */}
-          {selectedWorkflow.outputParameters.length > 0 && (
-            <div style={nodeStyles.fieldGroup}>
-              <label
-                style={{
-                  ...nodeStyles.label,
-                  fontSize: "13px",
-                  fontWeight: "600",
-                }}
-              >
-                Output Mappings:
-              </label>
-              {selectedWorkflow.outputParameters.map((param) => (
-                <div key={param} style={{ marginBottom: "8px" }}>
-                  <label style={{ ...nodeStyles.label, fontSize: "12px" }}>
-                    {param}:
-                    <input
-                      type="text"
-                      value={outputMappings[param] || ""}
-                      onChange={(e) =>
-                        handleOutputMappingChange(param, e.target.value)
-                      }
-                      style={{ ...nodeStyles.input, fontSize: "12px" }}
-                      placeholder={`Store ${param} as...`}
-                    />
-                  </label>
-                </div>
-              ))}
+                return (
+                  <div key={variable} style={{ marginBottom: "8px" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={!!selectedVariables[variable]}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            // Auto-suggest a name: use original if no conflict, or add suffix
+                            const suggestedName = hasConflict
+                              ? `${variable}_imported`
+                              : variable;
+                            handleVariableSelectionChange(
+                              variable,
+                              suggestedName
+                            );
+                          } else {
+                            handleVariableSelectionChange(variable, "");
+                          }
+                        }}
+                        style={{ cursor: "pointer" }}
+                      />
+                      <label
+                        style={{
+                          ...nodeStyles.label,
+                          fontSize: "12px",
+                          flex: 1,
+                        }}
+                      >
+                        {variable}
+                        {hasConflict && (
+                          <span
+                            style={{
+                              color: "#DC2626",
+                              fontSize: "10px",
+                              marginLeft: "4px",
+                            }}
+                          >
+                            ⚠ Name exists
+                          </span>
+                        )}
+                      </label>
+                    </div>
+
+                    {selectedVariables[variable] && (
+                      <div style={{ marginLeft: "24px", marginTop: "4px" }}>
+                        <input
+                          type="text"
+                          value={selectedName}
+                          onChange={(e) =>
+                            handleVariableSelectionChange(
+                              variable,
+                              e.target.value
+                            )
+                          }
+                          style={{
+                            ...nodeStyles.input,
+                            fontSize: "12px",
+                            borderColor:
+                              hasConflict && selectedName === variable
+                                ? "#DC2626"
+                                : "#E5E7EB",
+                          }}
+                          placeholder="Variable name in this workflow"
+                        />
+                        {hasConflict && selectedName === variable && (
+                          <div
+                            style={{
+                              fontSize: "10px",
+                              color: "#DC2626",
+                              marginTop: "2px",
+                            }}
+                          >
+                            Variable name already exists in this workflow
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 
